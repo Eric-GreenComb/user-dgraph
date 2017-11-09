@@ -5,7 +5,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"github.com/heroku/go-getting-started/dgraph"
+	"github.com/tokopedia/user-dgraph/dgraph"
 )
 
 func check(err error) {

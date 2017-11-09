@@ -7,9 +7,9 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/heroku/go-getting-started/riderorder"
-	"github.com/heroku/go-getting-started/userlogin"
 	"io/ioutil"
+	"github.com/tokopedia/user-dgraph/riderorder"
+	"github.com/tokopedia/user-dgraph/userlogin"
 )
 
 func main() {

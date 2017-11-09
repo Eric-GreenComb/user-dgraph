@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"github.com/heroku/go-getting-started/dgraph"
+	"github.com/tokopedia/user-dgraph/dgraph"
 )
 
 func check(err error) {
