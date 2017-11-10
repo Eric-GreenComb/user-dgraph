@@ -89,12 +89,6 @@ func LoadUserLoginData(request []byte) {
 	}
 	log.Println("Uid =" + uids)
 	fmt.Printf("started processing record for uid %v::%v\n", uids, time.Now())
-	//js, err := GetBytes(record.NewImage.UserData.Value)
-	//
-	//if err != nil {
-	//	fmt.Println("couldn't get []byte from record:", err)
-	//	return
-	//}
 
 	shaHash := getFingerprintHash(request, uids)
 
@@ -103,8 +97,8 @@ func LoadUserLoginData(request []byte) {
 	log.Printf("before uploading in graph, nos: %v, fin: %v\n", len(nos), len(shaHash))
 
 	if len(nos) > 0 || len(shaHash) > 0 {
-		//writetoDgraph(uids, getUserDetails(uids, db), shaHash, nos)
-		writetoDgraph(uids, userdata{}, shaHash, nos)
+		writetoDgraph(uids, getUserDetails(uids, db), shaHash, nos)
+		//writetoDgraph(uids, userdata{}, shaHash, nos)
 	}
 
 	fmt.Printf("completed processing record for uid %v::%v\n", uids, time.Now())
