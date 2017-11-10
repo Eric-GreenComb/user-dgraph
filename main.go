@@ -16,8 +16,7 @@ func main() {
 	port := os.Getenv("PORT")
 
 	if port == "" {
-		//log.Fatal("$PORT must be set")
-		log.Println("$PORT must be set")
+		log.Println("$PORT should be set")
 		port = "5000"
 	}
 
@@ -27,8 +26,6 @@ func main() {
 	router.Static("/static", "static")
 
 	router.StaticFile("/manifest.json", "manifest.json")
-	//router.StaticFile("/OneSignalSDKUpdaterWorker.js", "OneSignalSDKUpdaterWorker.js")
-	//router.StaticFile("/OneSignalSDKWorker.js", "OneSignalSDKWorker.js")
 
 	router.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.tmpl.html", nil)

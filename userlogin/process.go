@@ -10,11 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/buger/jsonparser"
+	"github.com/tokopedia/user-dgraph/dgraph"
 	"log"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/tokopedia/user-dgraph/dgraph"
 )
 
 func check(err error) {
@@ -63,12 +63,12 @@ func GetBytes(key interface{}) ([]byte, error) {
 
 func LoadUserLoginData(request []byte) {
 
-	/*db, err := sql.Open("postgres", connUser)
+	db, err := sql.Open("postgres", connUser)
 
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()*/
+	defer db.Close()
 
 	uid, err := jsonparser.GetString(request, "NewImage", "uid", "S")
 	if err != nil {
