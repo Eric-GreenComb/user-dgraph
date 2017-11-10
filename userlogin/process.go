@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/buger/jsonparser"
+	_ "github.com/lib/pq"
 	"github.com/tokopedia/user-dgraph/dgraph"
 	"log"
 	"strconv"
