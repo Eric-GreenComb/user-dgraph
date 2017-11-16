@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,11 +14,21 @@ func init() {
 }
 
 func WriteNetworkError(stmt string) {
-	err := ioutil.WriteFile(networkErrLog, []byte(stmt), 0777)
+	stmt += "\n"
+
+	f, err := os.OpenFile(networkErrLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Println("Error while writing to network-log:",err)
+		log.Println("Error while writing to network-log:", err)
 		log.Println(stmt)
 	}
+	if _, err := f.Write([]byte(stmt)); err != nil {
+		log.Println("Error while writing to network-log:", err)
+		log.Println(stmt)
+	}
+	if err := f.Close(); err != nil {
+		log.Println("Error while closing to network-logfile:", err)
+	}
+
 }
 
 func CreateLogDirectory() string {

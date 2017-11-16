@@ -64,8 +64,8 @@ func main() {
 		if !requestobj.From.IsValid() || !requestobj.To.IsValid() || requestobj.Promocode == "" {
 			context.JSON(200, "{'result':'invalid_req'}")
 		} else {
-			promotion.Process(requestobj)
 			context.JSON(200, "{'result':'ok'}")
+			promotion.Process(requestobj)
 		}
 	})
 
