@@ -1,6 +1,7 @@
 package promotion
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
 	"github.com/tokopedia/user-dgraph/dgraph"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -44,11 +46,26 @@ type Date struct {
 	Day   int        `json:"day"`
 }
 
+func (this *Date) Equal(date Date) bool {
+	return this.Year == date.Year && this.Month == date.Month && this.Day == date.Day
+}
+
+func GetDate(time time.Time) Date {
+	return Date{time.Year(), time.Month(), time.Day()}
+}
+
+func (date *Date) GetTime() time.Time {
+	return time.Date(date.Year, date.Month, date.Day, 0, 0, 0, 0, time.UTC)
+}
+func (date *Date) ToString() string {
+	return fmt.Sprintf("%d_%d_%d", date.Year, date.Month, date.Day)
+}
+
 /**
 Promo Code -> PaymentID -> OrderID -> Buyer UserID; ShopID -> Seller UserID
 */
 
-func GetPromotionData(promo string, dateFrom, dateTo Date) ([]PromoData, map[int64]int64) {
+func GetPromotionData(dateFrom, dateTo Date, promo, dataDirPath string, metaFile *os.File) ([]PromoData, map[int64]int64, error) {
 	defer utils.PrintTimeElapsed(time.Now(), "GetPromotionData Elapsed Time:")
 	db, err := sql.Open("postgres", connDataWH)
 	if err != nil {
@@ -65,8 +82,8 @@ func GetPromotionData(promo string, dateFrom, dateTo Date) ([]PromoData, map[int
 
 	log.Println("CONN SUCCESS")
 
-	from := time.Date(dateFrom.Year, dateFrom.Month, dateFrom.Day, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
-	to := time.Date(dateTo.Year, dateTo.Month, dateTo.Day, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	from := dateFrom.GetTime().Format(time.RFC3339)
+	to := dateTo.GetTime().Format(time.RFC3339)
 
 	count := getPaymentRefsCount(promo, from, to, db)
 
@@ -77,20 +94,31 @@ func GetPromotionData(promo string, dateFrom, dateTo Date) ([]PromoData, map[int
 		N += 1
 	}
 
+	if N == 0 {
+		metaFile.WriteString(fmt.Sprintf("No data for:%s->%s", dateFrom.ToString(), dateTo.ToString()))
+		return nil, nil, nil
+	}
+
 	type PromoDataWorker struct {
 		promodata []PromoData
 		shopIds   map[int64]bool
+		error     error
+		filepath  string
 	}
 	sem := make(chan PromoDataWorker, N)
 
+	filenum := 0
 	for offset < count {
 
-		go func(offset int) {
+		go func(offset int, filenum int) {
+			datafile := fmt.Sprintf("%s/%s_%s_%d", dataDirPath, dateFrom.ToString(), dateTo.ToString(), filenum)
 			promodata, shopIds := getPromotionDataWithOffset(promo, from, to, limit, offset, db)
+			err := writePromoDataToFile(promodata, datafile)
 			log.Println("len:", len(promodata), len(shopIds))
-			sem <- PromoDataWorker{promodata: promodata, shopIds: shopIds}
-		}(offset)
+			sem <- PromoDataWorker{promodata: promodata, shopIds: shopIds, error: err, filepath: datafile}
+		}(offset, filenum)
 		offset += limit
+		filenum++
 	}
 
 	// wait for goroutines to finish
@@ -99,14 +127,20 @@ func GetPromotionData(promo string, dateFrom, dateTo Date) ([]PromoData, map[int
 	for i := 0; i < N; {
 		i++
 		promodataWorker := <-sem
+		if promodataWorker.error != nil {
+			_, err = metaFile.WriteString(fmt.Sprintf("Error while writing to file:%s, err:%v", promodataWorker.filepath, promodataWorker.error))
+			if err != nil {
+				log.Println("Couldn't write to meta itself with error:", err)
+			}
+		}
 		promoData = append(promoData, promodataWorker.promodata...)
 		updateShopListMap(promodataWorker.shopIds, shopIdList)
 	}
 
-	shopSellerMap := getShopSellerMap(shopIdList, db)
+	shopSellerMap, err := getShopSellerMap(shopIdList, db, fmt.Sprintf("%s/shop_seller_map", dataDirPath))
 	fmt.Println("TotalShopSellerLength:", len(shopSellerMap))
 
-	return promoData, shopSellerMap
+	return promoData, shopSellerMap, nil
 
 }
 
@@ -154,15 +188,65 @@ func getPromotionDataWithOffset(promo, dateFrom, dateTo string, limit, offset in
 	return promoData, shopIds
 }
 
-func getShopSellerMap(shopIdList map[int64]bool, db *sql.DB) map[int64]int64 {
+// Will write the promo data in CSV ( shippingRef, buyer id,shop id)
+func writePromoDataToFile(promoData []PromoData, filepath string) error {
+
+	f, err := os.Create(filepath)
+	if err != nil {
+		log.Println("Error while creating file:", filepath, err)
+		return err
+	}
+	defer f.Close()
+
+	for _, pd := range promoData {
+		stmt := fmt.Sprintf("%s,%d,%d\n", pd.shippingRefNumber, pd.buyerId, pd.shopId)
+		if _, err := f.WriteString(stmt); err != nil {
+			log.Println("Error while writing to datafile:", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func getShopSellerMapFile() string {
+	return utils.GetLogDir() + "/shop_seller_map"
+}
+
+func GetExistingShopSellerMap() (map[int64]int64, error) {
+	fname := getShopSellerMapFile()
+	file, err := os.Open(fname)
+	if err != nil {
+		return nil, err
+	} else {
+		scanner := bufio.NewScanner(file)
+		shopSellerMap := make(map[int64]int64)
+		for scanner.Scan() {
+			temp := strings.Split(scanner.Text(), ",")
+			shopid, _ := strconv.ParseInt(temp[0], 10, 64)
+			sellerid, _ := strconv.ParseInt(temp[1], 10, 64)
+			shopSellerMap[shopid] = sellerid
+		}
+		return shopSellerMap, nil
+	}
+}
+
+func getShopSellerMap(shopIdList map[int64]bool, db *sql.DB, shopSellerMapFile string) (map[int64]int64, error) {
 	shopSellerMap := make(map[int64]int64)
+
+	f, err := os.OpenFile(shopSellerMapFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println("Error while creating/writing to shopSellerMapFile:", shopSellerMapFile, err)
+
+	}
+	defer f.Close()
+
 	sellerList := HashSetToCSV(shopIdList)
 	query := fmt.Sprintf(`SELECT shop_id,user_id FROM ws_shop WHERE shop_id in (%s)`, sellerList)
 
 	rows, err := db.Query(query)
 	if err != nil {
 		log.Println(err)
-		return shopSellerMap
+		return shopSellerMap, err
 	}
 	defer rows.Close()
 
@@ -172,9 +256,13 @@ func getShopSellerMap(shopIdList map[int64]bool, db *sql.DB) map[int64]int64 {
 			log.Println(err)
 			continue
 		}
+		if _, err := f.Write([]byte(fmt.Sprintf("%d,%d\n", shopId, sellerId))); err != nil {
+			log.Println("Error while writing to shopSellerMapFile:", err)
+			continue
+		}
 		shopSellerMap[shopId] = sellerId
 	}
-	return shopSellerMap
+	return shopSellerMap, nil
 }
 
 func getOrderDataByPaymentIDs(paymentIds []int64, db *sql.DB) ([]PromoData, map[int64]bool) {

@@ -7,9 +7,10 @@ import (
 )
 
 var networkErrLog string
+var logdir string
 
 func init() {
-	logdir := CreateLogDirectory()
+	logdir = CreateLogDirectory()
 	networkErrLog = logdir + "/network_error.log"
 }
 
@@ -42,4 +43,18 @@ func CreateLogDirectory() string {
 		os.Mkdir(logdir, 0777)
 	}
 	return logdir
+}
+
+func GetLogDir() string {
+	return logdir
+}
+
+// Returns complete path of newly created directory
+func CreateDirInsideLogDir(dirname string) (string, error) {
+	dirpath := logdir + "/" + dirname
+	if _, err := os.Stat(dirpath); os.IsNotExist(err) {
+		err := os.Mkdir(dirpath, 0777)
+		return dirpath, err
+	}
+	return dirpath, nil
 }

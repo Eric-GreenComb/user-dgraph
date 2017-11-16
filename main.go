@@ -7,11 +7,11 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/tokopedia/user-dgraph/dgraph"
 	"github.com/tokopedia/user-dgraph/promotion"
 	"github.com/tokopedia/user-dgraph/riderorder"
 	"github.com/tokopedia/user-dgraph/userlogin"
 	"io/ioutil"
-	"github.com/tokopedia/user-dgraph/dgraph"
 )
 
 func main() {
@@ -57,23 +57,33 @@ func main() {
 
 	})
 
-	router.POST("/dgraph/sync-promodata", func(context *gin.Context) {
+	router.POST("/dgraph/get-promodata", func(context *gin.Context) {
 		var requestobj promotion.PromoDataRequest
 		context.BindJSON(&requestobj)
 		log.Println("Sync Req:", requestobj)
 		if !requestobj.From.IsValid() || !requestobj.To.IsValid() || requestobj.Promocode == "" {
-			context.JSON(200, "{'result':'invalid_req'}")
+			context.JSON(http.StatusBadRequest, "{'result':'invalid_req'}")
 		} else {
+
+			dir, err := promotion.GetProcessingDir(requestobj)
+			if err != nil {
+				log.Println("Couldn't create the data directory with error:", err)
+				context.JSON(http.StatusInternalServerError, fmt.Sprintf("{'result':'ok', 'error':%v}", err))
+			}
+
 			context.JSON(200, "{'result':'ok'}")
-			promotion.Process(requestobj)
+			err = promotion.Process(requestobj, dir)
+			if err != nil {
+				log.Println("Error /dgraph/get-promodata:", err)
+			}
 		}
 	})
 
 	router.GET("/dgraph/_status", func(context *gin.Context) {
 		status := dgraph.CheckHealth()
 		if status != "OK" {
-			context.JSON(512, fmt.Sprintf("{'result':'failed', 'message':'%v'}",status))
-		}else{
+			context.JSON(512, fmt.Sprintf("{'result':'failed', 'message':'%v'}", status))
+		} else {
 			context.JSON(200, "{'result':'ok'}")
 		}
 	})

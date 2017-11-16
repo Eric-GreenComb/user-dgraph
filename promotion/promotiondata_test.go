@@ -10,7 +10,7 @@ import (
 
 func TestGetPaymentRefs(t *testing.T) {
 
-	promo_ship_refs, err := os.Create("/Users/ajayk/Documents/dgraph/promo_ship_ref" + time.Now().String())
+	promo_ship_refs, err := os.Create(fmt.Sprintf("/Users/ajayk/Documents/dgraph/promo_ship_ref_%v", time.Now().UnixNano()))
 	if err != nil {
 		panic(err)
 	}
@@ -23,7 +23,7 @@ func TestGetPaymentRefs(t *testing.T) {
 	to := Date{2017, time.November, 12}
 	promo_ship_refs.WriteString(fmt.Sprintf("%v : %v\n", from, to))
 
-	promoData, shopSellerMap := GetPromotionData("CASHBACKPASTI", from, to)
+	promoData, shopSellerMap, err := GetPromotionData("CASHBACKPASTI", from, to)
 	promo_ship_refs.WriteString(fmt.Sprintf("Total PromoData:%d\n", len(promoData)))
 
 	WritetoDgraph(promoData, shopSellerMap, promo_ship_refs)
@@ -32,6 +32,7 @@ func TestGetPaymentRefs(t *testing.T) {
 }
 
 func TestSliceToCSV(t *testing.T) {
-	fmt.Println(fmt.Sprintf("%v", (Date{2017, time.November, 9})))
-
+	//fmt.Println(fmt.Sprintf("/Users/ajayk/Documents/dgraph/promo_ship_ref_%v", time.Now().UnixNano()))
+	list := getProcessedShipRefNums("/Users/ajayk/go/src/github.com/tokopedia/user-dgraph/logs", "promo_ship_ref")
+	fmt.Println()
 }
