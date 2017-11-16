@@ -7,9 +7,11 @@ import (
 
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"io/ioutil"
+	"github.com/tokopedia/user-dgraph/promotion"
 	"github.com/tokopedia/user-dgraph/riderorder"
 	"github.com/tokopedia/user-dgraph/userlogin"
+	"io/ioutil"
+	"github.com/tokopedia/user-dgraph/dgraph"
 )
 
 func main() {
@@ -34,7 +36,7 @@ func main() {
 	router.POST("/dgraph/push/rider-order", func(context *gin.Context) {
 		var obj riderorder.DynamoStreamRecord
 		context.BindJSON(&obj)
-		fmt.Println("RiderOrder->>>>>>", obj)
+		log.Println("RiderOrder->>>>>>", obj)
 		riderorder.LoadRideData(&obj)
 		context.JSON(200, `{'result':'ok'}`)
 
@@ -54,6 +56,28 @@ func main() {
 		context.JSON(200, "{'result':'ok'}")
 
 	})
+
+	router.POST("/dgraph/sync-promodata", func(context *gin.Context) {
+		var requestobj promotion.PromoDataRequest
+		context.BindJSON(&requestobj)
+		log.Println("Sync Req:", requestobj)
+		if !requestobj.From.IsValid() || !requestobj.To.IsValid() || requestobj.Promocode == "" {
+			context.JSON(200, "{'result':'invalid_req'}")
+		} else {
+			promotion.Process(requestobj)
+			context.JSON(200, "{'result':'ok'}")
+		}
+	})
+
+	router.GET("/dgraph/_status", func(context *gin.Context) {
+		status := dgraph.CheckHealth()
+		if status != "OK" {
+			context.JSON(512, fmt.Sprintf("{'result':'failed', 'message':'%v'}",status))
+		}else{
+			context.JSON(200, "{'result':'ok'}")
+		}
+	})
+
 	router.Run(":" + port)
 }
 
