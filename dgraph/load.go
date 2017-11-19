@@ -3,11 +3,11 @@ package dgraph
 import (
 	"bytes"
 	"flag"
+	"github.com/tokopedia/user-dgraph/utils"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
-	"github.com/tokopedia/user-dgraph/utils"
 	"time"
 )
 
@@ -16,7 +16,7 @@ var (
 	//http://user.dgraph.service.dci-wallet.consul:8080/query
 )
 
-func UpsertDgraph(query string) string{
+func UpsertDgraph(query string) string {
 
 	//log.Println("query =", query)
 	message := "OK"
@@ -55,7 +55,7 @@ func UpsertDgraph(query string) string{
 		message = time.Now().String() + responseDataStr
 		utils.WriteNetworkError(message)
 		return message
-	}else{
+	} else {
 		message = responseDataStr
 		log.Println("Response=", message)
 		return message

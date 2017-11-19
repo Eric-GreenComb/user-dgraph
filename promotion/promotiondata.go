@@ -1,15 +1,12 @@
 package promotion
 
 import (
-	"bufio"
 	"database/sql"
 	"fmt"
 	"github.com/tokopedia/user-dgraph/dgraph"
 	"github.com/tokopedia/user-dgraph/utils"
 	"log"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -27,18 +24,6 @@ func (date *Date) IsValid() bool {
 		date.Day > 0 &&
 		date.Day <= 31
 }
-
-type PromoData struct {
-	shippingRefNumber string
-	buyerId           int64
-	sellerId          int64
-	shopId            int64
-}
-
-var (
-	connDataWH = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
-		"10.164.4.46", "ab171011", "fU8nT4RBV", "tokopedia-trove")
-)
 
 type Date struct {
 	Year  int        `json:"year"`
@@ -60,6 +45,18 @@ func (date *Date) GetTime() time.Time {
 func (date *Date) ToString() string {
 	return fmt.Sprintf("%d_%d_%d", date.Year, date.Month, date.Day)
 }
+
+type PromoData struct {
+	shippingRefNumber string
+	buyerId           int64
+	sellerId          int64
+	shopId            int64
+}
+
+var (
+	connDataWH = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+		"10.164.4.46", "ab171011", "fU8nT4RBV", "tokopedia-trove")
+)
 
 /**
 Promo Code -> PaymentID -> OrderID -> Buyer UserID; ShopID -> Seller UserID
@@ -111,7 +108,7 @@ func GetPromotionData(dateFrom, dateTo Date, promo, dataDirPath string, metaFile
 	for offset < count {
 
 		go func(offset int, filenum int) {
-			datafile := fmt.Sprintf("%s/%s_%s_%d", dataDirPath, dateFrom.ToString(), dateTo.ToString(), filenum)
+			datafile := fmt.Sprintf("%s/data_%s_%s_%d", dataDirPath, dateFrom.ToString(), dateTo.ToString(), filenum)
 			promodata, shopIds := getPromotionDataWithOffset(promo, from, to, limit, offset, db)
 			err := writePromoDataToFile(promodata, datafile)
 			log.Println("len:", len(promodata), len(shopIds))
@@ -208,28 +205,6 @@ func writePromoDataToFile(promoData []PromoData, filepath string) error {
 	return nil
 }
 
-func getShopSellerMapFile() string {
-	return utils.GetLogDir() + "/shop_seller_map"
-}
-
-func GetExistingShopSellerMap() (map[int64]int64, error) {
-	fname := getShopSellerMapFile()
-	file, err := os.Open(fname)
-	if err != nil {
-		return nil, err
-	} else {
-		scanner := bufio.NewScanner(file)
-		shopSellerMap := make(map[int64]int64)
-		for scanner.Scan() {
-			temp := strings.Split(scanner.Text(), ",")
-			shopid, _ := strconv.ParseInt(temp[0], 10, 64)
-			sellerid, _ := strconv.ParseInt(temp[1], 10, 64)
-			shopSellerMap[shopid] = sellerid
-		}
-		return shopSellerMap, nil
-	}
-}
-
 func getShopSellerMap(shopIdList map[int64]bool, db *sql.DB, shopSellerMapFile string) (map[int64]int64, error) {
 	shopSellerMap := make(map[int64]int64)
 
@@ -240,7 +215,7 @@ func getShopSellerMap(shopIdList map[int64]bool, db *sql.DB, shopSellerMapFile s
 	}
 	defer f.Close()
 
-	sellerList := HashSetToCSV(shopIdList)
+	sellerList := utils.HashSetToCSV(shopIdList)
 	query := fmt.Sprintf(`SELECT shop_id,user_id FROM ws_shop WHERE shop_id in (%s)`, sellerList)
 
 	rows, err := db.Query(query)
@@ -267,7 +242,7 @@ func getShopSellerMap(shopIdList map[int64]bool, db *sql.DB, shopSellerMapFile s
 
 func getOrderDataByPaymentIDs(paymentIds []int64, db *sql.DB) ([]PromoData, map[int64]bool) {
 	defer utils.PrintTimeElapsed(time.Now(), "getOrderDataByPaymentIDs elapsedTime:")
-	paymentIdsStr := SliceToCSV(paymentIds)
+	paymentIdsStr := utils.SliceToCSV(paymentIds)
 	query := fmt.Sprintf(`SELECT shop_id, customer_id, shipping_ref_num FROM ws_order WHERE payment_id IN (%s)`, paymentIdsStr)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -294,25 +269,8 @@ func getOrderDataByPaymentIDs(paymentIds []int64, db *sql.DB) ([]PromoData, map[
 	return promoDataList, shopIds
 }
 
-func SliceToCSV(list []int64) string {
-	output := ""
-	for _, v := range list {
-		output += strconv.FormatInt(v, 10) + ","
-	}
-	output = output[:len(output)-1]
-	return output
-}
-func HashSetToCSV(hashset map[int64]bool) string {
-	output := ""
-	for k, _ := range hashset {
-		output += strconv.FormatInt(k, 10) + ","
-	}
-	output = output[:len(output)-1]
-	return output
-}
-
-func WritetoDgraph(promoDataList []PromoData, shopSellerMap map[int64]int64, logfile *os.File) {
-	defer logfile.WriteString(fmt.Sprintf("Total time spent in dgraph writing:%v", utils.GetTimeElapsed(time.Now())))
+func WritetoDgraph(promoDataList []PromoData, shopSellerMap map[int64]int64) {
+	//defer logfile.WriteString(fmt.Sprintf("Total time spent in dgraph writing:%v", utils.GetTimeElapsed(time.Now())))
 
 	query :=
 		`{
@@ -340,7 +298,7 @@ func WritetoDgraph(promoDataList []PromoData, shopSellerMap map[int64]int64, log
 			continue
 		}
 
-		logfile.WriteString(promoData.shippingRefNumber + "\n")
+		//logfile.WriteString(promoData.shippingRefNumber + "\n")
 
 		dgraph.UpsertDgraph(fmt.Sprintf(query, buyer, seller, shipRefNum))
 

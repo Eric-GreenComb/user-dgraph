@@ -1,23 +1,20 @@
 package promotion
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"github.com/tokopedia/user-dgraph/utils"
-	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 	"time"
 )
 
-func GetProcessingDir(request PromoDataRequest)(string, error){
+func GetProcessingDir(request PromoDataRequest) (string, string, error) {
 	dataDirName := fmt.Sprintf("promodata_%s_%v", request.Promocode, time.Now().UnixNano())
 	dataDirPath, err := utils.CreateDirInsideLogDir(dataDirName)
-	return dataDirPath, err
+	return dataDirName, dataDirPath, err
 }
-func Process(request PromoDataRequest, dataDirPath string )  error {
+func Process(request PromoDataRequest, dataDirPath string) error {
 	utils.CreateLogDirectory()
 	from := request.From
 	to := request.To
@@ -61,33 +58,4 @@ func Process(request PromoDataRequest, dataDirPath string )  error {
 	meta.Sync()
 
 	return err
-}
-
-func getProcessedShipRefNums(dir, prefix string) map[string]bool {
-
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		log.Println("Couldn't open the directory:", err)
-	}
-
-	processedSRNs := make(map[string]bool)
-	for _, f := range files {
-		if strings.HasPrefix(f.Name(), prefix) {
-			file, err := os.Open(fmt.Sprintf("%s/%s", dir, f.Name()))
-			if err != nil {
-				log.Println("Got error while opening file:", f.Name())
-			} else {
-				scanner := bufio.NewScanner(file)
-				count := 0
-				for scanner.Scan() {
-					//skipping initial two lines
-					if count > 1 {
-						processedSRNs[scanner.Text()] = true
-					}
-					count++
-				}
-			}
-		}
-	}
-	return processedSRNs
 }

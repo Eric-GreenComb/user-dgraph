@@ -65,17 +65,33 @@ func main() {
 			context.JSON(http.StatusBadRequest, "{'result':'invalid_req'}")
 		} else {
 
-			dir, err := promotion.GetProcessingDir(requestobj)
+			dirname, dirpath, err := promotion.GetProcessingDir(requestobj)
 			if err != nil {
 				log.Println("Couldn't create the data directory with error:", err)
-				context.JSON(http.StatusInternalServerError, fmt.Sprintf("{'result':'ok', 'error':%v}", err))
+				context.JSON(http.StatusInternalServerError, fmt.Sprintf("{'result':'ok', 'error':'%v'}", err))
 			}
 
-			context.JSON(200, "{'result':'ok'}")
-			err = promotion.Process(requestobj, dir)
+			context.JSON(200, fmt.Sprintf("{'result':'ok', 'dir':'%s'}", dirname))
+			err = promotion.Process(requestobj, dirpath)
 			if err != nil {
 				log.Println("Error /dgraph/get-promodata:", err)
 			}
+		}
+	})
+
+	router.POST("/dgraph/load-promodata", func(context *gin.Context) {
+		var requestObj promotion.LoadDataRequest
+		context.BindJSON(&requestObj)
+		log.Println("Load Promo Req:", requestObj)
+		if requestObj.Dirname == "" {
+			context.JSON(http.StatusBadRequest, "{'result':'invalid_req'}")
+		} else {
+			context.JSON(200, fmt.Sprintf("{'result':'ok'}"))
+			err := promotion.LoadData(requestObj.Dirname)
+			if err != nil {
+				log.Println("Error /dgraph/load-promodata:", err)
+			}
+
 		}
 	})
 
