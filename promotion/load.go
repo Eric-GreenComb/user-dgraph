@@ -132,6 +132,14 @@ func getUsers(promodatalist []PromoData, shopSellerMap map[int64]int64) map[int6
 	return users
 }
 
+func DropAll(c *client.Dgraph) error {
+	err := c.Alter(context.Background(), &protos.Operation{DropAll: true})
+	if err != nil {
+		log.Println("Error while DropAll:", err)
+	}
+	return err
+}
+
 func WriteToDgraphV2(promoDataList []PromoData, shopSellerMap map[int64]int64, c *client.Dgraph) error {
 	defer utils.PrintTimeElapsed(time.Now(), "WriteToDgraphV2 Elapsed:")
 	ctx := context.Background()
@@ -227,10 +235,10 @@ func WriteToDgraphV2(promoDataList []PromoData, shopSellerMap map[int64]int64, c
 		srnsUidMap[v.ShipRefNum] = v.Uid
 	}
 
-	/*var (
-		mutex sync.Mutex
-		wg    sync.WaitGroup
-	)*/
+	//var (
+	//	mutex sync.Mutex
+	//	wg    sync.WaitGroup
+	//)
 	//Write PromoData
 	for _, promoData := range promoDataList {
 		//wg.Add(1)
@@ -238,12 +246,14 @@ func WriteToDgraphV2(promoDataList []PromoData, shopSellerMap map[int64]int64, c
 		srn := promoData.shippingRefNumber
 		buyerUid := useridUidMap[promoData.buyerId]
 		sellerUid := useridUidMap[shopSellerMap[promoData.shopId]]
-		srnUid := srnsUidMap[promoData.shippingRefNumber]
 
 		//TODO: have to find a way to pass the error from go routine
-		//go func(srn, buyerUid, sellerUid, srnUid string, c *client.Dgraph) {
+		//go func(srn, buyerUid, sellerUid string, c *client.Dgraph) {
 		//	defer wg.Done()
 		ctx := context.Background()
+
+		srnUid := srnsUidMap[promoData.shippingRefNumber]
+
 		s := ShipRefNumDgraph{
 			Name:       "ShippingRefNumber",
 			ShipRefNum: srn,
@@ -274,7 +284,7 @@ func WriteToDgraphV2(promoDataList []PromoData, shopSellerMap map[int64]int64, c
 			//mutex.Unlock()
 		}
 
-		//}(promoData.shippingRefNumber, useridUidMap[promoData.buyerId], useridUidMap[shopSellerMap[promoData.shopId]], srnsUidMap[promoData.shippingRefNumber], c)
+		//}(srn, buyerUid, sellerUid, c)
 	}
 	//wg.Wait()
 

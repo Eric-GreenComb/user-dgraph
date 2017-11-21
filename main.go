@@ -95,6 +95,15 @@ func main() {
 		}
 	})
 
+	router.POST("/restricted/dropall", func(context *gin.Context) {
+		err := promotion.DropAll(dgraph.NewClient())
+		if err != nil {
+			context.JSON(512, fmt.Sprintf("{'result':'failed', 'message':'%v'}", err))
+		} else {
+			context.JSON(200, "{'result':'ok'}")
+		}
+	})
+
 	router.GET("/dgraph/_status", func(context *gin.Context) {
 		status := dgraph.CheckHealth()
 		if status != "OK" {
