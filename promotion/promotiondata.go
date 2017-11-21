@@ -3,7 +3,6 @@ package promotion
 import (
 	"database/sql"
 	"fmt"
-	"github.com/tokopedia/user-dgraph/dgraph"
 	"github.com/tokopedia/user-dgraph/utils"
 	"log"
 	"os"
@@ -267,40 +266,4 @@ func getOrderDataByPaymentIDs(paymentIds []int64, db *sql.DB) ([]PromoData, map[
 	}
 	//log.Println("shop_id, customer_id, shipping_ref_num:", shopId, customerId, shippingRefNum)
 	return promoDataList, shopIds
-}
-
-func WritetoDgraph(promoDataList []PromoData, shopSellerMap map[int64]int64) {
-	//defer logfile.WriteString(fmt.Sprintf("Total time spent in dgraph writing:%v", utils.GetTimeElapsed(time.Now())))
-
-	query :=
-		`{
-			buyer  as var(func: eq(user_id, "%v"))      @upsert
-			seller as var(func: eq(user_id, "%v"))      @upsert
-			s_r    as var(func: eq(ship_ref_num, "%v")) @upsert
-		}
-
-		mutation {
-		  set {
-			uid(s_r) <name> "Shipping Ref Number" .
-			uid(buyer) <name> "USER" .
-			uid(seller) <name> "USER" .
-			uid(s_r) <buyer> uid(buyer) .
-			uid(s_r) <seller> uid(seller) .
-		  }
-		}`
-
-	for _, promoData := range promoDataList {
-		buyer := promoData.buyerId
-		shipRefNum := promoData.shippingRefNumber
-		seller := shopSellerMap[promoData.shopId]
-		if buyer == 0 || seller == 0 || shipRefNum == "" {
-			log.Println("Invalid promodata:buyer,seller,shipRefNum:", buyer, seller, shipRefNum)
-			continue
-		}
-
-		//logfile.WriteString(promoData.shippingRefNumber + "\n")
-
-		dgraph.UpsertDgraph(fmt.Sprintf(query, buyer, seller, shipRefNum))
-
-	}
 }
