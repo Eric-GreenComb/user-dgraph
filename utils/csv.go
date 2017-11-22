@@ -40,3 +40,12 @@ func HashSetStringToCSVString(hashset map[string]bool) string {
 	output = output[:len(output)-1]
 	return output
 }
+
+func StringListToCSVString(stringlist []string) string {
+	output := ""
+	for _, v := range stringlist {
+		output += fmt.Sprintf(`"%v",`, v)
+	}
+	output = output[:len(output)-1]
+	return output
+}

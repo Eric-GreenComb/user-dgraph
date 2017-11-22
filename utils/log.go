@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -57,4 +58,42 @@ func CreateDirInsideLogDir(dirname string) (string, error) {
 		return dirpath, err
 	}
 	return dirpath, nil
+}
+
+func WriteInt64HashSetToFile(hashset map[int64]bool, dataDirPath, filename string) error {
+	filep := fmt.Sprintf("%s/%s", dataDirPath, filename)
+	f, err := os.Create(filep)
+	if err != nil {
+		log.Println("Error while creating file:", filep, err)
+		return err
+	}
+	defer f.Close()
+
+	for k, _ := range hashset {
+		stmt := fmt.Sprintf("%d\n", k)
+		if _, err := f.WriteString(stmt); err != nil {
+			log.Println("Error while writing to file:", filep, err)
+			return err
+		}
+	}
+	return nil
+}
+
+func WriteStringHashSetToFile(hashset map[string]bool, dataDirPath, filename string) error {
+	filep := fmt.Sprintf("%s/%s", dataDirPath, filename)
+	f, err := os.Create(filep)
+	if err != nil {
+		log.Println("Error while creating file:", filep, err)
+		return err
+	}
+	defer f.Close()
+
+	for k, _ := range hashset {
+		stmt := fmt.Sprintf("%s\n", k)
+		if _, err := f.WriteString(stmt); err != nil {
+			log.Println("Error while writing to file:", filep, err)
+			return err
+		}
+	}
+	return nil
 }

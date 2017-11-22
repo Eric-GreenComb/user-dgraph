@@ -205,7 +205,30 @@ func writePromoDataToFile(promoData []PromoData, filepath string) error {
 }
 
 func getShopSellerMap(shopIdList map[int64]bool, db *sql.DB, shopSellerMapFile string) (map[int64]int64, error) {
-	shopSellerMap := make(map[int64]int64)
+	var shopSellerMap map[int64]int64
+	//shopSellerMap := make(map[int64]int64)
+
+	if _, err := os.Stat(shopSellerMapFile); os.IsNotExist(err) {
+		shopSellerMap = make(map[int64]int64)
+	} else {
+		shopSellerMap, err = GetShopSellerMap(shopSellerMapFile)
+		if err != nil {
+			log.Println("Error while reading existing shopSellerMap File:", err)
+			return nil, err
+		}
+	}
+
+	//Updating shopIdList
+	for k, _ := range shopIdList {
+		if shopSellerMap[k] != 0 {
+			delete(shopIdList, k)
+		}
+	}
+
+	//No new entry
+	if len(shopIdList) == 0 {
+		return shopSellerMap, nil
+	}
 
 	f, err := os.OpenFile(shopSellerMapFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {

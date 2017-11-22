@@ -7,17 +7,37 @@ import (
 	"log"
 )
 
-var dgraphhost = "10.0.11.162:7080" //"localhost:9080" //"10.0.11.162:7080" //"localhost:9080"
+var dgraphhost = "10.0.11.162:7080" //"localhost:9080"
+const (
+	QueryThreshold = 10000
+)
 
-func NewClient() *client.Dgraph {
+var c *client.Dgraph
+
+func newClient() *client.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
 	d, err := grpc.Dial(dgraphhost, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	return client.NewDgraphClient(
 		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
+		protos.NewDgraphClient(d),
 	)
+}
+
+func GetClient() *client.Dgraph {
+	if c == nil {
+		c = newClient()
+	}
+	return c
 }

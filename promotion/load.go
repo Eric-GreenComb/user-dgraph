@@ -3,7 +3,6 @@ package promotion
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
@@ -58,6 +57,152 @@ func LoadData(dir string) error {
 		return err
 	}
 
+	uniqueUserListFile := dirpath + "/unique_user_ids"
+	if _, err := os.Stat(uniqueUserListFile); os.IsNotExist(err) {
+		msg := fmt.Sprintf("uniqueUserListFile file doesn't exist cant process,path:%s", uniqueUserListFile)
+		log.Println(msg)
+		return errors.New(msg)
+	}
+
+	uniqueUsersList, err := utils.GetStringListFromFile(uniqueUserListFile)
+	if err != nil {
+		return err
+	}
+
+	uniqueSRNsListFile := dirpath + "/unique_srns"
+	if _, err := os.Stat(uniqueSRNsListFile); os.IsNotExist(err) {
+		msg := fmt.Sprintf("uniqueSRNsListFile file doesn't exist cant process,path:%s", uniqueSRNsListFile)
+		log.Println(msg)
+		return errors.New(msg)
+	}
+
+	uniqueSrnsList, err := utils.GetStringListFromFile(uniqueSRNsListFile)
+	if err != nil {
+		return err
+	}
+
+	c := dgraph.GetClient()
+	//First get all existing users
+	starttime := time.Now()
+	log.Println("Getting existing users at:", starttime)
+	userUIDMap := make(map[int64]string)
+	var fromidx int
+	for {
+		lastslice := false
+		toidx := fromidx + dgraph.QueryThreshold
+
+		if toidx >= len(uniqueUsersList) {
+			lastslice = true
+			toidx = len(uniqueUsersList)
+		}
+
+		useridscsv := utils.StringListToCSVString(uniqueUsersList[fromidx:toidx])
+		usersuids, err := GetUsersUIDs(useridscsv, c)
+		if err != nil {
+			return err
+		}
+		for _, useruid := range usersuids {
+			userUIDMap[useruid.Userid] = useruid.Uid
+		}
+
+		if lastslice {
+			break
+		}
+		fromidx = toidx
+	}
+	log.Println("Getting existing user time spent:", utils.GetTimeElapsed(starttime))
+	//Create remaining users
+	/*lenuserchan := len(uniqueUsersList) - len(userUIDMap)
+	type UserIdUid struct {
+		UserId int64
+		Uid    string
+	}
+	uidchan := make(chan UserIdUid, lenuserchan)
+	errchan := make(chan error, lenuserchan)*/
+	starttime = time.Now()
+	log.Println("UserCreation started at:", starttime)
+	counter := 0
+	for _, userid := range uniqueUsersList {
+		useridi, _ := strconv.ParseInt(userid, 10, 64)
+		if userUIDMap[useridi] == "" {
+			//go func(userid int64) {
+			uid, err := CreateUser(useridi, c)
+			//	errchan <- err
+			//	uidchan <- UserIdUid{useridi, uid}
+			//}(useridi)
+
+			if err != nil {
+				return err
+			}
+			userUIDMap[useridi] = uid
+			counter++
+			//log.Println(fmt.Sprintf("UserCreated:%d->%s", useridi, uid))
+		}
+	}
+	log.Println(fmt.Sprintf("Total user created (%d) with time spent:(%v)", counter, utils.GetTimeElapsed(starttime)))
+
+	/*for i := 0; i < 2*lenuserchan; i++ {
+		select {
+		case err := <-errchan:
+			if err != nil {
+				return err
+			}
+		case uids := <-uidchan:
+			if uids.Uid != "" && uids.UserId != 0 {
+				userUIDMap[uids.UserId] = uids.Uid
+			}
+		}
+	}*/
+
+	starttime = time.Now()
+	log.Println("Getting existing srns started at:", starttime)
+	//First get all existing srns
+	srnUIDmap := make(map[string]string)
+	fromidx = 0
+	for {
+		lastslice := false
+		toidx := fromidx + dgraph.QueryThreshold
+
+		if toidx >= len(uniqueSrnsList) {
+			lastslice = true
+			toidx = len(uniqueSrnsList)
+		}
+
+		srnscsv := utils.StringListToCSVString(uniqueSrnsList[fromidx:toidx])
+		srnUids, err := GetSRNUIDs(srnscsv, c)
+		if err != nil {
+			return err
+		}
+		for _, srnuid := range srnUids {
+			srnUIDmap[srnuid.ShipRefNum] = srnuid.Uid
+		}
+		if lastslice {
+			break
+		}
+		fromidx = toidx
+	}
+	log.Println("Getting existing srns time spent:", utils.GetTimeElapsed(starttime))
+
+	//Create remaining srns
+	counter = 0
+	starttime = time.Now()
+	log.Println("SRNCreation started at:", starttime)
+	for _, srn := range uniqueSrnsList {
+		if srnUIDmap[srn] == "" {
+			uid, err := CreateSRN(srn, c)
+			if err != nil {
+				return err
+			}
+			srnUIDmap[srn] = uid
+			counter++
+			//log.Println(fmt.Sprintf("SRNCreated:%s>%s", srn, uid))
+		}
+	}
+	log.Println(fmt.Sprintf("Total srns created (%d) with time spent:%v", counter, utils.GetTimeElapsed(starttime)))
+
+	//Relationship creation started
+	starttime = time.Now()
+	log.Println("Relationship creation started at:", starttime)
 	for _, f := range files {
 		if strings.HasPrefix(f.Name(), "data") && !processedFiles[f.Name()] {
 			log.Println("Processing:", dirpath+"/"+f.Name())
@@ -66,17 +211,16 @@ func LoadData(dir string) error {
 			if err != nil {
 				log.Println("Error while reading from file:", dirpath+"/"+f.Name(), err)
 			}
-			err = WriteToDgraphV2(promoData, shopSellerMap, dgraph.NewClient())
+			err = CreateRelationships(promoData, shopSellerMap, userUIDMap, srnUIDmap, c)
 			if err != nil {
 				log.Println("Err:", err)
 			} else {
 				logfile.WriteString(fmt.Sprintf("%s\n", f.Name()))
 			}
-			//WritetoDgraph(promoData, shopSellerMap)
-
 			//}(dirpath + "/" + f.Name())
 		}
 	}
+	log.Println("All relationship created, time spent:", utils.GetTimeElapsed(starttime))
 
 	return nil
 }
@@ -121,18 +265,8 @@ func GetShopSellerMap(path string) (map[int64]int64, error) {
 	return shopSellerMap, nil
 }
 
-func getUsers(promodatalist []PromoData, shopSellerMap map[int64]int64) map[int64]bool {
-
-	users := make(map[int64]bool)
-
-	for _, v := range promodatalist {
-		users[v.buyerId] = true
-		users[shopSellerMap[v.shopId]] = true
-	}
-	return users
-}
-
-func DropAll(c *client.Dgraph) error {
+func DropAll() error {
+	c := dgraph.GetClient()
 	err := c.Alter(context.Background(), &protos.Operation{DropAll: true})
 	if err != nil {
 		log.Println("Error while DropAll:", err)
@@ -140,211 +274,37 @@ func DropAll(c *client.Dgraph) error {
 	return err
 }
 
-func WriteToDgraphV2(promoDataList []PromoData, shopSellerMap map[int64]int64, c *client.Dgraph) error {
-	defer utils.PrintTimeElapsed(time.Now(), "WriteToDgraphV2 Elapsed:")
+func CreateRelationships(promoDataList []PromoData, shopSellerMap map[int64]int64, userUidMap map[int64]string, srnUidMap map[string]string, c *client.Dgraph) error {
+	starttime := time.Now()
 	ctx := context.Background()
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
 
 	//err := c.Alter(ctx, &protos.Operation{DropAll: true})
 
-	users := getUsers(promoDataList, shopSellerMap)
-	usersStr := utils.HashSetIntToCSVString(users)
-	u_q := fmt.Sprintf(`{
-			get_users(func: eq(user_id, [%s])){
-				uid
-				user_id
-			}
-		}`, usersStr)
-
-	resp, err := txn.Query(ctx, u_q)
-	if err != nil {
-		log.Println(u_q, err)
-		return err
-	}
-	var usersDecode struct {
-		GetUsers []struct {
-			Uid    string `json:"uid"`
-			Userid int64  `json:"user_id"`
-		} `json:"get_users"`
-	}
-
-	if err := json.Unmarshal(resp.GetJson(), &usersDecode); err != nil {
-		log.Println(resp, err)
-	}
-
-	//1.
-	useridUidMap := make(map[int64]string)
-	for _, v := range usersDecode.GetUsers {
-		useridUidMap[v.Userid] = v.Uid
-	}
-
-	//Create remaining users
-	for userid := range users {
-		if useridUidMap[userid] == "" {
-			u := UserDgraph{
-				Name:   "USER",
-				UserId: userid,
-			}
-			mu := &protos.Mutation{CommitNow: true}
-			ujson, err := json.Marshal(u)
-			if err != nil {
-				log.Println("Marshal error:", u, err)
-				return err
-			}
-			mu.SetJson = ujson
-			assigned, err := c.NewTxn().Mutate(ctx, mu)
-			if err != nil {
-				log.Println("Dgraph user creation error", mu, err)
-				return err
-			}
-			userUid := assigned.Uids["blank-0"]
-			useridUidMap[userid] = userUid
-		}
-	}
-
-	shipRefNumSet := getShipRefNums(promoDataList)
-	shipRefNumSetStr := utils.HashSetStringToCSVString(shipRefNumSet)
-	srn_q := fmt.Sprintf(`{
-			get_srns(func: eq(ship_ref_num, [%s])){
-				uid
-				ship_ref_num
-			}
-		}`, shipRefNumSetStr)
-
-	resp, err = txn.Query(ctx, srn_q)
-	if err != nil {
-		log.Println(srn_q, err)
-		return err
-	}
-
-	var srnsDecode struct {
-		GetSrns []struct {
-			Uid        string `json:"uid"`
-			ShipRefNum string `json:"ship_ref_num"`
-		} `json:"get_srns"`
-	}
-
-	if err := json.Unmarshal(resp.GetJson(), &srnsDecode); err != nil {
-		log.Println(resp, err)
-	}
-
-	//2.
-	srnsUidMap := make(map[string]string)
-	for _, v := range srnsDecode.GetSrns {
-		srnsUidMap[v.ShipRefNum] = v.Uid
-	}
-
 	//var (
 	//	mutex sync.Mutex
 	//	wg    sync.WaitGroup
 	//)
 	//Write PromoData
+	counter := 0
 	for _, promoData := range promoDataList {
 		//wg.Add(1)
 
-		srn := promoData.shippingRefNumber
-		buyerUid := useridUidMap[promoData.buyerId]
-		sellerUid := useridUidMap[shopSellerMap[promoData.shopId]]
+		srnUid := srnUidMap[promoData.shippingRefNumber]
+		buyerUid := userUidMap[promoData.buyerId]
+		sellerUid := userUidMap[shopSellerMap[promoData.shopId]]
 
-		//TODO: have to find a way to pass the error from go routine
 		//go func(srn, buyerUid, sellerUid string, c *client.Dgraph) {
 		//	defer wg.Done()
-		ctx := context.Background()
-
-		srnUid := srnsUidMap[promoData.shippingRefNumber]
-
-		s := ShipRefNumDgraph{
-			Name:       "ShippingRefNumber",
-			ShipRefNum: srn,
-			Uid:        srnUid,
-			Buyer:      UserDgraph{Uid: buyerUid},
-			Seller:     UserDgraph{Uid: sellerUid},
-		}
-		mu := &protos.Mutation{CommitNow: true}
-		srnjson, err := json.Marshal(s)
+		err := CreateRelation(srnUid, buyerUid, sellerUid, c)
 		if err != nil {
-			log.Println("Marshal Error", s, err)
-		}
-		mu.SetJson = srnjson
-		txn := c.NewTxn()
-		defer txn.Discard(ctx)
-
-		assigned, err := txn.Mutate(ctx, mu)
-		if err != nil {
-			log.Println("Dgraph srn creation error:", mu, err)
 			return err
 		}
-
-		if srnUid == "" {
-			newSrnUid := assigned.Uids["blank-0"]
-			//Concurrent map write
-			//mutex.Lock()
-			srnsUidMap[srn] = newSrnUid
-			//mutex.Unlock()
-		}
-
+		counter++
 		//}(srn, buyerUid, sellerUid, c)
 	}
 	//wg.Wait()
-
+	log.Println(fmt.Sprintf("Total relationships created (%d) with time spent:%v", counter, utils.GetTimeElapsed(starttime)))
 	return nil
-}
-
-type UserDgraph struct {
-	Uid    string `json:"uid,omitempty"`
-	Name   string `json:"name,omitempty"`
-	UserId int64  `json:"user_id,omitempty"`
-}
-
-type ShipRefNumDgraph struct {
-	Uid        string     `json:"uid,omitempty"`
-	Name       string     `json:"name,omitempty"`
-	ShipRefNum string     `json:"ship_ref_num, omitempty"`
-	Buyer      UserDgraph `json:"buyer,omitempty"`
-	Seller     UserDgraph `json:"seller,omitempty"`
-}
-
-func getShipRefNums(list []PromoData) map[string]bool {
-	shipRefNumSet := make(map[string]bool)
-	for _, promodata := range list {
-		shipRefNumSet[promodata.shippingRefNumber] = true
-	}
-	return shipRefNumSet
-}
-
-func WritetoDgraph(promoDataList []PromoData, shopSellerMap map[int64]int64) {
-	//defer logfile.WriteString(fmt.Sprintf("Total time spent in dgraph writing:%v", utils.GetTimeElapsed(time.Now())))
-
-	query :=
-		`{
-			buyer  as var(func: eq(user_id, "%v"))      @upsert
-			seller as var(func: eq(user_id, "%v"))      @upsert
-			s_r    as var(func: eq(ship_ref_num, "%v")) @upsert
-		}
-
-		mutation {
-		  set {
-			uid(s_r) <name> "ShippingRefNumber" .
-			uid(buyer) <name> "USER" .
-			uid(seller) <name> "USER" .
-			uid(s_r) <buyer> uid(buyer) .
-			uid(s_r) <seller> uid(seller) .
-		  }
-		}`
-
-	for _, promoData := range promoDataList {
-		buyer := promoData.buyerId
-		shipRefNum := promoData.shippingRefNumber
-		seller := shopSellerMap[promoData.shopId]
-		if buyer == 0 || seller == 0 || shipRefNum == "" {
-			log.Println("Invalid promodata:buyer,seller,shipRefNum:", buyer, seller, shipRefNum)
-			continue
-		}
-
-		//logfile.WriteString(promoData.shippingRefNumber + "\n")
-
-		dgraph.UpsertDgraph(fmt.Sprintf(query, buyer, seller, shipRefNum))
-
-	}
 }
