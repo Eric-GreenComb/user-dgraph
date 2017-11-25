@@ -87,7 +87,7 @@ func main() {
 			context.JSON(http.StatusBadRequest, "{'result':'invalid_req'}")
 		} else {
 			context.JSON(200, fmt.Sprintf("{'result':'ok'}"))
-			err := promotion.LoadData(requestObj.Dirname)
+			err := promotion.LoadDgraph(requestObj.Dirname)
 			if err != nil {
 				log.Println("Error /dgraph/load-promodata:", err)
 			}

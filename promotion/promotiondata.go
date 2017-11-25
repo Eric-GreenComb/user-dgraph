@@ -103,6 +103,8 @@ func GetPromotionData(dateFrom, dateTo Date, promo, dataDirPath string, metaFile
 	}
 	sem := make(chan PromoDataWorker, N)
 
+	var promoData []PromoData
+	shopIdList := make(map[int64]bool)
 	filenum := 0
 	for offset < count {
 
@@ -110,7 +112,18 @@ func GetPromotionData(dateFrom, dateTo Date, promo, dataDirPath string, metaFile
 			datafile := fmt.Sprintf("%s/data_%s_%s_%d", dataDirPath, dateFrom.ToString(), dateTo.ToString(), filenum)
 			promodata, shopIds := getPromotionDataWithOffset(promo, from, to, limit, offset, db)
 			err := writePromoDataToFile(promodata, datafile)
+			if err != nil {
+				_, err = metaFile.WriteString(fmt.Sprintf("Error while writing to file:%s, err:%v", datafile, err))
+				if err != nil {
+					log.Println("Couldn't write to meta itself with error:", err)
+				}
+			}
 			log.Println("len:", len(promodata), len(shopIds))
+
+			//seq
+			/*promoData = append(promoData, promodata...)
+			updateShopListMap(shopIds, shopIdList)*/
+
 			sem <- PromoDataWorker{promodata: promodata, shopIds: shopIds, error: err, filepath: datafile}
 		}(offset, filenum)
 		offset += limit
@@ -118,8 +131,7 @@ func GetPromotionData(dateFrom, dateTo Date, promo, dataDirPath string, metaFile
 	}
 
 	// wait for goroutines to finish
-	var promoData []PromoData
-	shopIdList := make(map[int64]bool)
+
 	for i := 0; i < N; {
 		i++
 		promodataWorker := <-sem
@@ -160,7 +172,7 @@ func getPaymentRefsCount(promo, from, to string, db *sql.DB) int {
 
 func getPromotionDataWithOffset(promo, dateFrom, dateTo string, limit, offset int, db *sql.DB) ([]PromoData, map[int64]bool) {
 	defer utils.PrintTimeElapsed(time.Now(), "runPaymentRefQuery elapsed time:")
-	query := fmt.Sprintf(`SELECT payment_id FROM ws_payment_promo_galadriel WHERE code = $1 AND create_time > $2 AND create_time < $3 LIMIT $4 OFFSET $5`)
+	query := fmt.Sprintf(`SELECT payment_id FROM ws_payment_promo_galadriel WHERE code = $1 AND create_time > $2 AND create_time < $3 ORDER BY id LIMIT $4 OFFSET $5`)
 
 	var promoData []PromoData
 	rows, err := db.Query(query, promo, dateFrom, dateTo, limit, offset)

@@ -3,8 +3,6 @@ package promotion
 import (
 	"fmt"
 	_ "github.com/lib/pq"
-	"github.com/tokopedia/user-dgraph/utils"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -35,8 +33,10 @@ func TestGetPaymentRefs(t *testing.T) {
 
 func TestSliceToCSV(t *testing.T) {
 	//fmt.Println(fmt.Sprintf("/Users/ajayk/Documents/dgraph/promo_ship_ref_%v", time.Now().UnixNano()))
-	starttime := time.Now().Add(-100000)
-	log.Println(fmt.Sprintf("Total user created (%d) with time spent:(%s)", 10, utils.GetTimeElapsed(starttime)))
+	frm := Date{2017, 11, 11}
+	nextDay := GetDate(frm.GetTime().AddDate(0, 0, 1))
+	fmt.Println(frm.GetTime().Format(time.RFC3339))
+	fmt.Println(nextDay.GetTime().Format(time.RFC3339))
 	/*amap := make(map[string]string)
 	amap["a"] = "z"
 	amap["b"] = "y"
