@@ -2,6 +2,7 @@ package userlogin
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"database/sql"
 	"encoding/base64"
@@ -10,18 +11,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/buger/jsonparser"
+	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
 	_ "github.com/lib/pq"
 	"github.com/tokopedia/user-dgraph/dgraph"
+	"github.com/tokopedia/user-dgraph/riderorder"
 	"log"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func check(err error) {
-	if err != nil {
-		panic(err)
-	}
+type Result struct {
+	User        []riderorder.User        `json:"user"`
+	Fingerprint []Fingerprint            `json:"fingerprint"`
+	PhoneNumber []riderorder.PhoneNumber `json:"phone"`
+}
+
+type Fingerprint struct {
+	UID              string `json:"uid,omitempty"`
+	Name             string `json:"name,omitempty"`
+	Fingerprint_Data string `json:"fingerprint_data,omitempty"`
 }
 
 type userdata struct {
@@ -62,7 +72,7 @@ func GetBytes(key interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func LoadUserLoginData(request []byte) {
+func LoadUserLoginData(ctx context.Context, request []byte) {
 
 	db, err := sql.Open("postgres", connUser)
 
@@ -73,7 +83,7 @@ func LoadUserLoginData(request []byte) {
 
 	uid, err := jsonparser.GetString(request, "NewImage", "uid", "S")
 	if err != nil {
-		fmt.Println("Doesn't contains the uid, exiting")
+		log.Println("Doesn't contains the uid, exiting")
 		return
 	}
 
@@ -84,25 +94,35 @@ func LoadUserLoginData(request []byte) {
 		_, ez := strconv.Atoi(uids)
 
 		if ez != nil {
-			fmt.Println("Got error:", ez)
+			log.Println("Got error:", ez)
 			return
 		}
 	}
 	log.Println("Uid =" + uids)
-	fmt.Printf("started processing record for uid %v::%v\n", uids, time.Now())
+	log.Printf("started processing record for uid %v::%v\n", uids, time.Now())
 
 	shaHash := getFingerprintHash(request, uids)
 
-	nos := getPhoneNos(request)
+	nos, err := getPhoneNos(request)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	log.Printf("before uploading in graph, nos: %v, fin: %v\n", len(nos), len(shaHash))
 
 	if len(nos) > 0 || len(shaHash) > 0 {
-		writetoDgraph(uids, getUserDetails(uids, db), shaHash, nos)
+		c := dgraph.GetClient()
+		udata, err := getUserDetails(uids, db)
+		if err != nil {
+			log.Println(uids, err)
+			return
+		}
+		writetoDgraph(ctx, c, uids, udata, shaHash, nos)
 		//writetoDgraph(uids, userdata{}, shaHash, nos)
 	}
 
-	fmt.Printf("completed processing record for uid %v::%v\n", uids, time.Now())
+	log.Printf("completed processing record for uid %v::%v\n", uids, time.Now())
 
 }
 
@@ -123,14 +143,13 @@ func getFingerprintHash(js []byte, uids string) []string {
 				shaHash = append(shaHash, hex.EncodeToString(hasher.Sum(nil)))
 			}
 		}
-		fmt.Println("Got Finger::", string(finger))
 
 	}, "NewImage", "user_data", "M", "filtron", "M", "uuid_"+uids, "M", "fingerprint_data", "L")
 
 	return shaHash
 }
 
-func getPhoneNos(js []byte) []string {
+func getPhoneNos(js []byte) ([]string, error) {
 
 	phonenos := make([]string, 0)
 	category := [4]string{"1", "2", "9", "20"}
@@ -138,63 +157,173 @@ func getPhoneNos(js []byte) []string {
 	for _, v := range category {
 		client, _, _, e4 := jsonparser.Get(js, "NewImage", "user_data", "M", "digital", "M", "category_"+v, "M")
 		if e4 == nil {
-			clientno := getClientNumber(client)
+			clientno, err := getClientNumber(client)
 
+			if err != nil {
+				return phonenos, err
+			}
 			if len(strings.TrimSpace(clientno)) > 0 {
 				phonenos = append(phonenos, clientno)
 			}
 
 		}
 	}
-	log.Println("PhoneNos:", phonenos)
-	return phonenos
+	return phonenos, nil
 }
 
-func writetoDgraph(userid string, usr userdata, finger []string, phones []string) {
+func writetoDgraph(ctx context.Context, ct *client.Dgraph, userid string, usr userdata, finger []string, phones []string) {
 
-	query :=
-		`{
-  			u as var(func: eq(user_id, "%v")) @upsert
-			f as var(func:eq(fingerprint_data,"%v")) @upsert
-
+	q1 := `
+	{
+		user(func: eq(user_id, %q)) {
+			uid
 		}
-
-		mutation {
-		  set {
-			uid(f) <name> "FINGERPRINT" .
-			uid(u) <name> "USER" .
-			uid(u) <user_name> "%v" .
-			uid(u) <user_email_id> "%v" .
-			uid(u) <device.finger.print> uid(f) .
-		  }
-		}`
-
-	query2 :=
-		`{
-  			u as var(func: eq(user_id, "%v")) @upsert
-			p as var(func: eq(phone_number, "%v")) @upsert
+		fingerprint(func:eq(fingerprint_data,%q)){
+			uid
 		}
+	}`
 
-		mutation {
-		  set {
-			uid(u) <pulsa.phone.number> uid(p) .
-			uid(u) <name> "USER" .
-			uid(p) <name> "PHONE" .
-			uid(u) <user_name> "%v" .
-			uid(u) <user_email_id> "%v" .
-		  }
-		}`
+	q2 := `
+	{
+		user(func: eq(user_id, %q)) {
+			uid
+		}
+		phone(func:eq(phone_number,%q)){
+			uid
+		}
+	}`
 
-	//fmt.Println("UserLogin FingerPrint Query1:", query)
-	//fmt.Println("UserLogin FingerPrint Query2:", query2)
 	for _, v := range finger {
-		dgraph.UpsertDgraph(fmt.Sprintf(query, userid, v, getValidValues(usr.user_name), getValidValues(usr.user_email_id)))
+		q := fmt.Sprintf(q1, userid, v)
+		txn := ct.NewTxn()
+		defer txn.Discard(ctx)
+		r := searchDGraph(txn, q)
+		err := upsertFingerprint(ctx, txn, r, usr, userid, v)
+		if err != nil {
+			log.Println(q, err)
+			return
+		}
 	}
 
 	for _, va := range phones {
-		dgraph.UpsertDgraph(fmt.Sprintf(query2, userid, va, getValidValues(usr.user_name), getValidValues(usr.user_email_id)))
-
+		q := fmt.Sprintf(q2, userid, va)
+		txn := ct.NewTxn()
+		defer txn.Discard(ctx)
+		r := searchDGraph(txn, q)
+		err := upsertPhone(ctx, txn, r, usr, userid, va)
+		if err != nil {
+			log.Println(q, err)
+			return
+		}
 	}
+}
+
+func upsertPhone(ctx context.Context, txn *client.Txn, r Result, usr userdata, userid string, p string) error {
+
+	q := `
+		%v <user_id> %q .
+		%v <phone_number> %q .
+		%v <name> "PHONE" .
+		%v <name> "USER" .
+		%v <user_name> %q .
+		%v <user_email_id> %q .
+		%v <PulsaPhoneNumber> %v .`
+
+	var f, u string
+
+	if len(r.User) == 0 {
+		u = "_:u"
+	} else {
+		u = "<" + r.User[0].UID + ">"
+	}
+
+	if len(r.PhoneNumber) == 0 {
+		f = "_:f"
+	} else {
+		f = "<" + r.PhoneNumber[0].UID + ">"
+	}
+
+	q = fmt.Sprintf(q,
+		u, userid,
+		f, p,
+		f, u,
+		u, getValidValues(usr.user_name),
+		u, getValidValues(usr.user_email_id),
+		u, f)
+
+	log.Println(q)
+
+	mu := &protos.Mutation{SetNquads: []byte(q)}
+	_, err := txn.Mutate(ctx, mu)
+
+	if err != nil {
+		return err
+	}
+
+	return txn.Commit(ctx)
+}
+
+func upsertFingerprint(ctx context.Context, txn *client.Txn, r Result, usr userdata, userid string, fp string) error {
+
+	q := `
+	%v <user_id> %q .
+	%v <fingerprint_data> %q .
+	%v <name> "FINGERPRINT" .
+	%v <name> "USER" .
+	%v <user_name> %q .
+	%v <user_email_id> %q .
+	%v <DeviceFingerPrint> %v .`
+
+	var f, u string
+
+	if len(r.User) == 0 {
+		u = "_:u"
+	} else {
+		u = "<" + r.User[0].UID + ">"
+	}
+
+	if len(r.Fingerprint) == 0 {
+		f = "_:f"
+	} else {
+		f = "<" + r.Fingerprint[0].UID + ">"
+	}
+
+	q = fmt.Sprintf(q,
+		u, userid,
+		f, fp,
+		f, u,
+		u, getValidValues(usr.user_name),
+		u, getValidValues(usr.user_email_id),
+		u, f)
+
+	log.Println(q)
+
+	mu := &protos.Mutation{SetNquads: []byte(q)}
+	_, err := txn.Mutate(ctx, mu)
+
+	if err != nil {
+		return err
+	}
+	return txn.Commit(ctx)
+}
+
+func searchDGraph(txn *client.Txn, q1 string) Result {
+
+	log.Println("query = ", q1)
+
+	resp, err := txn.Query(context.Background(), q1)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var r Result
+	err = json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return r
 }
 
 func getValidValues(s sql.NullString) string {
@@ -205,11 +334,11 @@ func getValidValues(s sql.NullString) string {
 	}
 }
 
-func getClientNumber(arr []byte) string {
+func getClientNumber(arr []byte) (string, error) {
 	var j map[string]interface{}
 	err := json.Unmarshal([]byte(arr), &j)
 	if err != nil {
-		check(err)
+		return "", err
 	}
 
 	for _, value := range j {
@@ -224,7 +353,7 @@ func getClientNumber(arr []byte) string {
 
 						if key1 == "client_number" {
 							for _, val5 := range val4.(map[string]interface{}) {
-								return val5.(string)
+								return val5.(string), nil
 
 							}
 						}
@@ -234,43 +363,43 @@ func getClientNumber(arr []byte) string {
 		}
 
 	}
-	return ""
+
+	return "", nil
 }
 
-func getUserDetails(uid string, db *sql.DB) userdata {
+func getUserDetails(uid string, db *sql.DB) (userdata, error) {
 
 	c, ok := userids[uid]
 
-	log.Println("ok =", ok)
-
 	if ok {
-		return c
+		return c, nil
 	}
 
 	err := db.Ping()
 
 	if err != nil {
-		log.Fatal("Error: Could not establish a connection with the database")
-		check(err)
+		log.Println("Error: Could not establish a connection with the database")
+		return userdata{}, err
 	}
 
-	log.Println("CONN SUCCESS =")
 	query := `select user_name,user_email from ws_user
 				where user_id =$1`
 
 	var bd userdata
 
 	rows, err := db.Query(query, uid)
-	check(err)
+	if err != nil {
+		return userdata{}, err
+	}
 	defer rows.Close()
 
 	for rows.Next() {
 		if err = rows.Scan(&bd.user_name, &bd.user_email_id); err != nil {
-			check(err)
+			return userdata{}, err
 		}
 	}
 
 	log.Println("Bd = ", bd)
 	userids[uid] = bd
-	return bd
+	return bd, nil
 }

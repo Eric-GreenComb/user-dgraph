@@ -1,19 +1,16 @@
 package riderorder
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
+	"github.com/tokopedia/user-dgraph/dgraph"
 	"log"
 	"strconv"
 	"strings"
-	"github.com/tokopedia/user-dgraph/dgraph"
 )
-
-func check(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 
 type DynamoStreamRecord struct {
 	Keys     map[string]map[string]string `json:"Keys"`
@@ -91,6 +88,60 @@ type Data struct {
 	} `json:"total_amount"`
 }
 
+type PhoneNumber struct {
+	UID   string `json:"uid,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Phone string `json:"phone_number,omitempty"`
+}
+type Device struct {
+	UID        string `json:"uid,omitempty"`
+	Name       string `json:"name,omitempty"`
+	DeviceId   string `json:"device_id,omitempty"`
+	DeviceType string `json:"device_type,omitempty"`
+}
+type Vehicle struct {
+	UID             string `json:"uid,omitempty"`
+	Name            string `json:"name,omitempty"`
+	VehicleNo       string `json:"vehicle_license_plate,omitempty`
+	DriverName      string `json:driver_name,omitempty`
+	PhoneNumberUsed []PhoneNumber
+}
+type Ride struct {
+	UID            string `json:"uid,omitempty"`
+	Name           string `json:"name,omitempty"`
+	RideId         string `json:"ride_id,omitempty"`
+	Rider          []User
+	Driver         []Vehicle
+	PickupLocation []Location
+	DestLocation   []Location
+}
+type Location struct {
+	UID            string `json:"uid,omitempty"`
+	Name           string `json:"name,omitempty"`
+	LocationCoords string `json:"location_coords,omitempty"`
+}
+type User struct {
+	UID              string `json:"uid,omitempty"`
+	Name             string `json:"name,omitempty"`
+	Email            string `json:"user_email_id,omitempty"`
+	UserId           string `json:"user_id,omitempty"`
+	PhoneNumberUsed  []PhoneNumber
+	DeviceOwned      []Device
+	DrivenBy         []PhoneNumber
+	PulsaPhoneNumber []PhoneNumber
+}
+
+type Root struct {
+	User         []User        `json:"user"`
+	UPhoneNumber []PhoneNumber `json:"uphone"`
+	DPhoneNumber []PhoneNumber `json:"dphone"`
+	Device       []Device      `json:"device"`
+	Vehicle      []Vehicle     `json:"vehicle"`
+	Ride         []Ride        `json:"ride"`
+	PLocation    []Location    `json:"ploc"`
+	DLocation    []Location    `json:"dloc"`
+}
+
 const query string = `{
   			u as var(func: eq(user_id, "%v")) @upsert
 			up as var(func: eq(phone_number, "%v")) @upsert
@@ -137,35 +188,7 @@ const query string = `{
 		  }
 		}`
 
-func getPincode(s string) string {
-	arr := strings.Split(s, " ")
-	if len(arr)-2 >= 0 {
-		v := strings.Replace(arr[len(arr)-2], ",", "", -1)
-
-		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
-			return v
-		} else {
-			return "-999"
-		}
-
-	} else {
-		return "-999"
-	}
-}
-
 var ids = make(map[string]struct{})
-
-func writeUserId(c Data) {
-	_, ok := ids[c.User_Id.Value]
-
-	if !ok {
-		ids[c.User_Id.Value] = struct{}{} // add element
-		fmt.Println("UserID:", c.User_Id.Value)
-		//_, err:= fmt.Fprintf(w, "%v\n", c.User_Id.Value)
-		//check(err)
-	}
-
-}
 
 func normalize(s string) string {
 	dphone := strings.Replace(s, "-", "", -1)
@@ -180,7 +203,7 @@ func normalizeAddress(s string) string {
 
 func formatGeoLoc(f string) string {
 	d, err := strconv.ParseFloat(f, 64)
-	check(err)
+	log.Println(f, err)
 	s := fmt.Sprintf("%.3f", d)
 	log.Println("s = ", s)
 
@@ -203,61 +226,204 @@ func concatName(lo string, la string) string {
 	return strings.Join(sa, "_")
 }
 
-func LoadRideData(record *DynamoStreamRecord) {
-	//file, err := os.Open("/Users/ajayk/Documents/rider_order/ride_order.json")
-	//check(err)
-	//defer file.Close()
-
-	//scanOrder := bufio.NewScanner(file)
-
-	//ul, err := os.Create("/Users/ajay/Documents/user_id_list.csv")
-	//check(err)
-	//defer ul.Close()
-
-	//lw := bufio.NewWriter(ul)
-
-	//scanOrder := record.NewImage
-
-	//for scanOrder.Scan() {
-	//	json.Unmarshal(scanOrder.Bytes(), record)
-	//fmt.Println(record)
-	//c, ok := record.NewImage.(RiderOrderData)
-	//if !ok {
-	//	fmt.Errorf("couldn't get the new Image:%v", ok)
-	//	return
-	//}
-
+func LoadRideData(ctx context.Context, record *DynamoStreamRecord) {
 	c := record.NewImage
 	if c.Status.Value == "completed" {
-		writeUserId(c)
-
-		q := fmt.Sprintf(query,
-			c.User_Id.Value,
-			normalize(c.User_Phone_Number.Value),
-			normalize(c.Driver_Phone_Number.Value),
-			c.Device_Id.Value,
-			c.Vehicle_License_Plate.Value,
-			c.Request_Id.Value,
-			concatLocations(c.Pickup_Longitude.Value, c.Pickup_Latitude.Value),
-			concatLocations(c.Destination_Longitude.Value, c.Destination_Latitude.Value),
-			c.User_Email_Id.Value,
-			"USER",
-			"VEHICLE",
-			"DEVICE", "PHONE", "PHONE", c.Device_Type.Value,
-			c.Driver_Name.Value,
-			"RIDE", "LOCATION", "LOCATION",
-			concatName(c.User_First_Name.Value, c.User_Last_Name.Value),
-			c.Ride_Amount.Value,
-			normalizeAddress(c.Pickup_Address.Value),
-			normalizeAddress(c.Destination_Address.Value),
-			getPincode(c.Pickup_Address.Value),
-			getPincode(c.Destination_Address.Value))
-
-		dgraph.UpsertDgraph(q)
+		cl := dgraph.GetClient()
+		writeToDgraph(ctx, cl, c)
 
 	}
+}
 
-	//}
+func writeToDgraph(ctx context.Context, ct *client.Dgraph, d Data) {
+	txn := ct.NewTxn()
+	defer txn.Discard(ctx)
+	q := getQuery(d)
+	log.Println(q)
 
-	//lw.Flush()
+	resp, err := txn.Query(ctx, q)
+	if err != nil {
+		log.Println(q, err)
+		return
+	}
+
+	var r Root
+	err = json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	err = upsertData(ctx, r, txn, d)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+}
+
+func getQuery(c Data) string {
+
+	const q = `
+	{
+		user(func: eq(user_id, "%v")) {
+			uid
+		}
+		uphone(func: eq(phone_number, "%v")) {
+			uid
+		}
+		dphone(func: eq(phone_number, "%v")) {
+			uid
+		}
+		device(func: eq(device_id, "%v")) {
+			uid
+		}
+		vehicle(func: eq(vehicle_license_plate, "%v")) {
+			uid
+		}
+		ride(func: eq(ride_id, "%v")) {
+			uid
+		}
+		ploc(func: eq(location_coords, "%v")) {
+			uid
+		}
+		dloc(func: eq(location_coords, "%v")) {
+			uid
+		}
+	}
+`
+	return fmt.Sprintf(q,
+		c.User_Id.Value,
+		normalize(c.User_Phone_Number.Value),
+		normalize(c.Driver_Phone_Number.Value),
+		c.Device_Id.Value,
+		c.Vehicle_License_Plate.Value,
+		c.Request_Id.Value,
+		concatLocations(c.Pickup_Longitude.Value, c.Pickup_Latitude.Value),
+		concatLocations(c.Destination_Longitude.Value, c.Destination_Latitude.Value))
+
+}
+
+func upsertData(ctx context.Context, r Root, txn *client.Txn, c Data) error {
+	q := `
+	%v <user_id> %q .
+	%v <device_id> %q .
+	%v <vehicle_license_plate> %q .
+	%v <location_coords> %q .
+	%v <location_coords> %q .
+	%v <ride_id> %q .
+	%v <phone_number> %q .
+	%v <phone_number> %q .
+
+	%v <user_email_id> %q .
+	%v <name> "DEVICE" .
+	%v <name> "PHONE" .
+	%v <name> "PHONE" .
+	%v <user_name> %q .
+	%v <DeviceOwned> %v .
+	%v <PhoneNumberUsed> %v .
+
+	%v <device_type> %q .
+	%v <driver_name> %q .
+	%v <name> "RIDE" .  	# label for ride
+	%v <name> "LOCATION" .  	# label for location
+	%v <name> "LOCATION" .  	# label for location
+
+	%v <PickupLocation> %v .
+	%v <DestinationLocation> %v .
+
+	%v <ride_amount> %q .
+	%v <pickup_address> %q .
+	%v <destination_address> %q .
+	%v <DrivenBy> %v .
+
+	%v <Rider> %v .
+	%v <Driver> %v .
+	`
+	var u, d, p, v, ri, pl, dl, dp string
+
+	if len(r.User) == 0 {
+		u = "_:u"
+	} else {
+		u = "<" + r.User[0].UID + ">"
+	}
+
+	if len(r.Device) == 0 {
+		d = "_:d"
+	} else {
+		d = "<" + r.Device[0].UID + ">"
+	}
+
+	if len(r.UPhoneNumber) == 0 {
+		p = "_:p"
+	} else {
+		p = "<" + r.UPhoneNumber[0].UID + ">"
+	}
+
+	if len(r.Vehicle) == 0 {
+		v = "_:v"
+	} else {
+		v = "<" + r.Vehicle[0].UID + ">"
+	}
+
+	if len(r.Ride) == 0 {
+		ri = "_:ri"
+	} else {
+		ri = "<" + r.Ride[0].UID + ">"
+	}
+
+	if len(r.PLocation) == 0 {
+		pl = "_:pl"
+	} else {
+		pl = "<" + r.PLocation[0].UID + ">"
+	}
+
+	if len(r.DLocation) == 0 {
+		dl = "_:dl"
+	} else {
+		dl = "<" + r.DLocation[0].UID + ">"
+	}
+
+	if len(r.DPhoneNumber) == 0 {
+		dp = "_:dp"
+	} else {
+		dp = "<" + r.DPhoneNumber[0].UID + ">"
+	}
+
+	q = fmt.Sprintf(q,
+		u, c.User_Id.Value,
+		d, c.Device_Id.Value,
+		v, c.Vehicle_License_Plate.Value,
+
+		pl, concatLocations(c.Pickup_Longitude.Value, c.Pickup_Latitude.Value),
+		dl, concatLocations(c.Destination_Longitude.Value, c.Destination_Latitude.Value),
+		ri, c.Request_Id.Value,
+		p, normalize(c.User_Phone_Number.Value),
+		dp, normalize(c.Driver_Phone_Number.Value),
+		u, c.User_Email_Id.Value,
+		d, p, dp,
+		u, concatName(c.User_First_Name.Value, c.User_Last_Name.Value),
+		u, d,
+		u, p,
+		d, c.Device_Type.Value,
+		v, c.Driver_Name.Value,
+		ri, pl, dl,
+		ri, pl,
+		ri, dl,
+		ri, c.Ride_Amount.Value,
+		pl, normalizeAddress(c.Pickup_Address.Value),
+		dl, normalizeAddress(c.Destination_Address.Value),
+		u, dp,
+		ri, u,
+		ri, v)
+
+	log.Println(q)
+
+	mu := &protos.Mutation{SetNquads: []byte(q)}
+	_, err := txn.Mutate(ctx, mu)
+
+	if err != nil {
+		return err
+	}
+
+	return txn.Commit(ctx)
 }

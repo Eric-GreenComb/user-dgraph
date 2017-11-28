@@ -12,6 +12,8 @@ import (
 	"github.com/tokopedia/user-dgraph/riderorder"
 	"github.com/tokopedia/user-dgraph/userlogin"
 	"io/ioutil"
+
+	"context"
 )
 
 func main() {
@@ -33,27 +35,26 @@ func main() {
 		c.HTML(http.StatusOK, "index.tmpl.html", nil)
 	})
 
-	router.POST("/dgraph/push/rider-order", func(context *gin.Context) {
+	router.POST("/dgraph/push/rider-order", func(ginContext *gin.Context) {
 		var obj riderorder.DynamoStreamRecord
-		context.BindJSON(&obj)
+		ginContext.BindJSON(&obj)
 		log.Println("RiderOrder->>>>>>", obj)
-		riderorder.LoadRideData(&obj)
-		context.JSON(200, `{'result':'ok'}`)
+		ctx := context.Background()
+		riderorder.LoadRideData(ctx, &obj)
+		ginContext.JSON(200, `{'result':'ok'}`)
 
 	})
-	router.POST("/dgraph/push/user-login", func(context *gin.Context) {
+	router.POST("/dgraph/push/user-login", func(ginContext *gin.Context) {
 		var req []byte
-		req, err := ioutil.ReadAll(context.Request.Body)
+		req, err := ioutil.ReadAll(ginContext.Request.Body)
 		if err != nil {
 			log.Println("fail to read request data")
 			return
 		}
 
-		//var obj userlogin.DynamoStreamRecord
-		//context.BindJSON(&obj)
-		//fmt.Println("UserLogin->>>>>>", obj)
-		userlogin.LoadUserLoginData(req)
-		context.JSON(200, "{'result':'ok'}")
+		ctx := context.Background()
+		userlogin.LoadUserLoginData(ctx, req)
+		ginContext.JSON(200, "{'result':'ok'}")
 
 	})
 
@@ -126,11 +127,11 @@ const (
 	NEW_IMAGE = "NewImage"
 )
 
-func TestUserLogin() {
+/*func TestUserLogin() {
 	filepath := "/Users/ajayk/Downloads/sample_user_login.json"
 	data, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		log.Println("Couldn't read file", err)
 	}
 	userlogin.LoadUserLoginData(data)
-}
+}*/
