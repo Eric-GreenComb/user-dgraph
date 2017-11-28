@@ -142,52 +142,6 @@ type Root struct {
 	DLocation    []Location    `json:"dloc"`
 }
 
-const query string = `{
-  			u as var(func: eq(user_id, "%v")) @upsert
-			up as var(func: eq(phone_number, "%v")) @upsert
-			dp as var(func: eq(phone_number, "%v")) @upsert
-			d as var(func: eq(device_id, "%v")) @upsert
-			v as var(func: eq(vehicle_license_plate, "%v")) @upsert
-			r as var(func: eq(ride_id, "%v")) @upsert
-			pl as var(func: eq(location_coords, "%v")) @upsert
-			dl as var(func: eq(location_coords, "%v")) @upsert
-		}
-
-		mutation {
-		  set {
-			uid(u) <user_email_id> "%v" .
-			uid(u) <label> "%v" . 	# label for user
-			uid(v) <label> "%v" . 	# label for vehicle
-			uid(d) <name> "%v" . 	# label for device
-			uid(dp) <name> "%v" . 	# label for phone
-			uid(up) <name> "%v" . 	# label for phone
-			uid(d) <device_type> "%v" .
-			uid(v) <driver_name> "%v" .
-			uid(r) <name> "%v" .  	# label for ride
-			uid(pl) <name> "%v" .  	# label for location
-			uid(dl) <name> "%v" .  	# label for location
-			uid(u) <user_name> "%v" .
-
-			uid(r) <pickup_location> uid(pl) .
-			uid(r) <destination_location> uid(dl) .
-
-			uid(r) <ride_amount> "%v" .
-			uid(pl) <pickup_address> "%v" .
-			uid(dl) <destination_address> "%v" .
-			uid(pl) <pickup_pincode> "%v" .
-			uid(dl) <destination_pincode> "%v" .
-
-			uid(u) <device.owned> uid(d) .
-			uid(u) <phone.number.used> uid(up) .
-			uid(v) <phone.number.used> uid(dp) .
-			uid(u) <driven.by> uid(dp) .
-
-			uid(u) <rider> uid(r) .
-			uid(v) <driver> uid(r) .
-
-		  }
-		}`
-
 var ids = make(map[string]struct{})
 
 func normalize(s string) string {
@@ -292,58 +246,58 @@ func getQuery(c Data) string {
 	}
 `
 
-	query := `{\n`
+	query := `{`
 
 	if c.User_Id.Value != "" {
 		query += fmt.Sprintf(`user(func: eq(user_id, "%v")) {
 			uid
-		}\n`, c.User_Id.Value)
+		}`, c.User_Id.Value)
 	}
 
 	phone := normalize(c.User_Phone_Number.Value)
 	if phone != "" {
 		query += fmt.Sprintf(`uphone(func: eq(phone_number, "%v")) {
 			uid
-		}\n`, phone)
+		}`, phone)
 	}
 
 	phone = normalize(c.Driver_Phone_Number.Value)
 	if phone != "" {
 		query += fmt.Sprintf(`dphone(func: eq(phone_number, "%v")) {
 			uid
-		}\n`, phone)
+		}`, phone)
 	}
 
 	if c.Device_Id.Value != "" {
 		query += fmt.Sprintf(`device(func: eq(device_id, "%v")) {
 			uid
-		}\n`, c.Device_Id.Value)
+		}`, c.Device_Id.Value)
 	}
 
 	if c.Vehicle_License_Plate.Value != "" {
 		query += fmt.Sprintf(`vehicle(func: eq(vehicle_license_plate, "%v")) {
 			uid
-		}\n`, c.Vehicle_License_Plate.Value)
+		}`, c.Vehicle_License_Plate.Value)
 	}
 
 	if c.Request_Id.Value != "" {
 		query += fmt.Sprintf(`ride(func: eq(ride_id, "%v")) {
 			uid
-		}\n`, c.Request_Id.Value)
+		}`, c.Request_Id.Value)
 	}
 
 	location := concatLocations(c.Pickup_Longitude.Value, c.Pickup_Latitude.Value)
 	if location != "" {
 		query += fmt.Sprintf(`ploc(func: eq(location_coords, "%v")) {
 			uid
-		}\n`, location)
+		}`, location)
 	}
 
 	location = concatLocations(c.Destination_Longitude.Value, c.Destination_Latitude.Value)
 	if location != "" {
 		query += fmt.Sprintf(`dloc(func: eq(location_coords, "%v")) {
 			uid
-		}\n`, location)
+		}`, location)
 	}
 
 	query += `}`
