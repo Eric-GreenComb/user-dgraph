@@ -291,15 +291,64 @@ func getQuery(c Data) string {
 		}
 	}
 `
-	return fmt.Sprintf(q,
-		c.User_Id.Value,
-		normalize(c.User_Phone_Number.Value),
-		normalize(c.Driver_Phone_Number.Value),
-		c.Device_Id.Value,
-		c.Vehicle_License_Plate.Value,
-		c.Request_Id.Value,
-		concatLocations(c.Pickup_Longitude.Value, c.Pickup_Latitude.Value),
-		concatLocations(c.Destination_Longitude.Value, c.Destination_Latitude.Value))
+
+	query := `{\n`
+
+	if c.User_Id.Value != "" {
+		query += fmt.Sprintf(`user(func: eq(user_id, "%v")) {
+			uid
+		}\n`, c.User_Id.Value)
+	}
+
+	phone := normalize(c.User_Phone_Number.Value)
+	if phone != "" {
+		query += fmt.Sprintf(`uphone(func: eq(phone_number, "%v")) {
+			uid
+		}\n`, phone)
+	}
+
+	phone = normalize(c.Driver_Phone_Number.Value)
+	if phone != "" {
+		query += fmt.Sprintf(`dphone(func: eq(phone_number, "%v")) {
+			uid
+		}\n`, phone)
+	}
+
+	if c.Device_Id.Value != "" {
+		query += fmt.Sprintf(`device(func: eq(device_id, "%v")) {
+			uid
+		}\n`, c.Device_Id.Value)
+	}
+
+	if c.Vehicle_License_Plate.Value != "" {
+		query += fmt.Sprintf(`vehicle(func: eq(vehicle_license_plate, "%v")) {
+			uid
+		}\n`, c.Vehicle_License_Plate.Value)
+	}
+
+	if c.Request_Id.Value != "" {
+		query += fmt.Sprintf(`ride(func: eq(ride_id, "%v")) {
+			uid
+		}\n`, c.Request_Id.Value)
+	}
+
+	location := concatLocations(c.Pickup_Longitude.Value, c.Pickup_Latitude.Value)
+	if location != "" {
+		query += fmt.Sprintf(`ploc(func: eq(location_coords, "%v")) {
+			uid
+		}\n`, location)
+	}
+
+	location = concatLocations(c.Destination_Longitude.Value, c.Destination_Latitude.Value)
+	if location != "" {
+		query += fmt.Sprintf(`dloc(func: eq(location_coords, "%v")) {
+			uid
+		}\n`, location)
+	}
+
+	query += `}`
+
+	return query
 
 }
 
