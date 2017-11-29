@@ -6,7 +6,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"google.golang.org/grpc"
 	"log"
-	"net/rpc"
 )
 
 var dgraphhost = "10.0.11.162:7080" //"localhost:9080"
