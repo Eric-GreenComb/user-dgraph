@@ -2,16 +2,19 @@ package dgraph
 
 import (
 	"context"
+	"fmt"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"log"
+	"strings"
 )
 
 var dgraphhost = "10.0.11.162:7080" //"localhost:9080"
 const (
 	QueryThreshold           = 10000
-	DGraphMutationRetryCount = 5
+	DGraphMutationRetryCount = 10
 )
 
 var c *client.Dgraph
@@ -45,13 +48,20 @@ func GetClient() *client.Dgraph {
 }
 
 func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter int) error {
-	for counter != 0 {
+	for counter > 0 {
 		err := doMutate(ctx, cl, query)
 		if err != nil {
-			counter--
+			if strings.Contains(err.Error(), "Transaction aborted") {
+				counter--
+			} else {
+				return err
+			}
 		} else {
 			return nil
 		}
+	}
+	if counter == 0 {
+		return errors.New(fmt.Sprintf("Tried transaction commit for %d times but couldn't commit.", counter))
 	}
 	return nil
 }
@@ -63,12 +73,8 @@ func doMutate(ctx context.Context, cl *client.Dgraph, query string) error {
 	mu := &protos.Mutation{SetNquads: []byte(query)}
 	_, err := txn.Mutate(ctx, mu)
 	if err != nil {
-		log.Println("ErrorMutate:", err)
 		return err
 	}
 	err = txn.Commit(ctx)
-	if err != nil {
-		log.Println("ErrorCommit:", err)
-	}
 	return err
 }
