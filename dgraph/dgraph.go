@@ -2,10 +2,10 @@ package dgraph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"log"
 	"strings"
