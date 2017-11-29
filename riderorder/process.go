@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/tokopedia/user-dgraph/dgraph"
+	"github.com/tokopedia/user-dgraph/utils"
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type DynamoStreamRecord struct {
@@ -181,11 +182,12 @@ func concatName(lo string, la string) string {
 }
 
 func LoadRideData(ctx context.Context, record *DynamoStreamRecord) {
+	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadRideData:")
 	c := record.NewImage
 	if c.Status.Value == "completed" {
+		log.Println("Got completed ride:", c)
 		cl := dgraph.GetClient()
 		writeToDgraph(ctx, cl, c)
-
 	}
 }
 
@@ -193,7 +195,6 @@ func writeToDgraph(ctx context.Context, ct *client.Dgraph, d Data) {
 	txn := ct.NewTxn()
 	defer txn.Discard(ctx)
 	q := getQuery(d)
-	log.Println(q)
 
 	resp, err := txn.Query(ctx, q)
 	if err != nil {
@@ -208,11 +209,7 @@ func writeToDgraph(ctx context.Context, ct *client.Dgraph, d Data) {
 		return
 	}
 
-	err = upsertData(ctx, r, txn, d)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+	upsertData(ctx, ct, r, d)
 }
 
 func getQuery(c Data) string {
@@ -306,7 +303,7 @@ func getQuery(c Data) string {
 
 }
 
-func upsertData(ctx context.Context, r Root, txn *client.Txn, c Data) error {
+func upsertData(ctx context.Context, cl *client.Dgraph, r Root, c Data) {
 	q := `
 	%v <user_id> %q .
 	%v <device_id> %q .
@@ -419,14 +416,10 @@ func upsertData(ctx context.Context, r Root, txn *client.Txn, c Data) error {
 		ri, u,
 		ri, v)
 
-	log.Println(q)
-
-	mu := &protos.Mutation{SetNquads: []byte(q)}
-	_, err := txn.Mutate(ctx, mu)
+	err := dgraph.RetryMutate(ctx, cl, q, dgraph.DGraphMutationRetryCount)
 
 	if err != nil {
-		return err
+		log.Println(q, err)
+		return
 	}
-
-	return txn.Commit(ctx)
 }

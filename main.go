@@ -38,7 +38,6 @@ func main() {
 	router.POST("/dgraph/push/rider-order", func(ginContext *gin.Context) {
 		var obj riderorder.DynamoStreamRecord
 		ginContext.BindJSON(&obj)
-		log.Println("RiderOrder->>>>>>", obj)
 		ctx := context.Background()
 		riderorder.LoadRideData(ctx, &obj)
 		ginContext.JSON(200, `{'result':'ok'}`)

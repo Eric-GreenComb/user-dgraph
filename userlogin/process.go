@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"github.com/buger/jsonparser"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
 	_ "github.com/lib/pq"
 	"github.com/tokopedia/user-dgraph/dgraph"
 	"github.com/tokopedia/user-dgraph/riderorder"
+	"github.com/tokopedia/user-dgraph/utils"
 	"log"
 	"strconv"
 	"strings"
@@ -73,7 +73,7 @@ func GetBytes(key interface{}) ([]byte, error) {
 }
 
 func LoadUserLoginData(ctx context.Context, request []byte) {
-
+	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadUserLoginData:")
 	db, err := sql.Open("postgres", connUser)
 
 	if err != nil {
@@ -98,11 +98,8 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 			return
 		}
 	}
-	log.Println("Uid =" + uids)
-	log.Printf("started processing record for uid %v::%v\n", uids, time.Now())
 
 	shaHash := getFingerprintHash(request, uids)
-
 	nos, err := getPhoneNos(request)
 	if err != nil {
 		log.Println(err)
@@ -121,9 +118,6 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 		writetoDgraph(ctx, c, uids, udata, shaHash, nos)
 		//writetoDgraph(uids, userdata{}, shaHash, nos)
 	}
-
-	log.Printf("completed processing record for uid %v::%v\n", uids, time.Now())
-
 }
 
 func getFingerprintHash(js []byte, uids string) []string {
@@ -195,30 +189,33 @@ func writetoDgraph(ctx context.Context, ct *client.Dgraph, userid string, usr us
 
 	for _, v := range finger {
 		q := fmt.Sprintf(q1, userid, v)
-		txn := ct.NewTxn()
-		defer txn.Discard(ctx)
-		r := searchDGraph(txn, q)
-		err := upsertFingerprint(ctx, txn, r, usr, userid, v)
+		r := Result{}
+		r, err := searchDGraph(ctx, ct, q)
 		if err != nil {
 			log.Println(q, err)
+			return
+		}
+		err = upsertFingerprint(ctx, ct, r, usr, userid, v)
+		if err != nil {
 			return
 		}
 	}
 
 	for _, va := range phones {
 		q := fmt.Sprintf(q2, userid, va)
-		txn := ct.NewTxn()
-		defer txn.Discard(ctx)
-		r := searchDGraph(txn, q)
-		err := upsertPhone(ctx, txn, r, usr, userid, va)
+		r, err := searchDGraph(ctx, ct, q)
 		if err != nil {
 			log.Println(q, err)
+			return
+		}
+		err = upsertPhone(ctx, ct, r, usr, userid, va)
+		if err != nil {
 			return
 		}
 	}
 }
 
-func upsertPhone(ctx context.Context, txn *client.Txn, r Result, usr userdata, userid string, p string) error {
+func upsertPhone(ctx context.Context, cl *client.Dgraph, r Result, usr userdata, userid string, p string) error {
 
 	q := `
 		%v <user_id> %q .
@@ -251,19 +248,14 @@ func upsertPhone(ctx context.Context, txn *client.Txn, r Result, usr userdata, u
 		u, getValidValues(usr.user_email_id),
 		u, f)
 
-	log.Println(q)
-
-	mu := &protos.Mutation{SetNquads: []byte(q)}
-	_, err := txn.Mutate(ctx, mu)
-
+	err := dgraph.RetryMutate(ctx, cl, q, dgraph.DGraphMutationRetryCount)
 	if err != nil {
-		return err
+		log.Println(q, err)
 	}
-
-	return txn.Commit(ctx)
+	return err
 }
 
-func upsertFingerprint(ctx context.Context, txn *client.Txn, r Result, usr userdata, userid string, fp string) error {
+func upsertFingerprint(ctx context.Context, cl *client.Dgraph, r Result, usr userdata, userid string, fp string) error {
 
 	q := `
 	%v <user_id> %q .
@@ -296,34 +288,28 @@ func upsertFingerprint(ctx context.Context, txn *client.Txn, r Result, usr userd
 		u, getValidValues(usr.user_email_id),
 		u, f)
 
-	log.Println(q)
-
-	mu := &protos.Mutation{SetNquads: []byte(q)}
-	_, err := txn.Mutate(ctx, mu)
-
+	err := dgraph.RetryMutate(ctx, cl, q, dgraph.DGraphMutationRetryCount)
 	if err != nil {
-		return err
+		log.Println(q, err)
 	}
-	return txn.Commit(ctx)
+	return err
 }
 
-func searchDGraph(txn *client.Txn, q1 string) Result {
-
-	log.Println("query = ", q1)
-
-	resp, err := txn.Query(context.Background(), q1)
-
-	if err != nil {
-		log.Fatal(err)
-	}
+func searchDGraph(ctx context.Context, cl *client.Dgraph, q string) (Result, error) {
+	txn := cl.NewTxn()
+	defer txn.Discard(ctx)
 
 	var r Result
-	err = json.Unmarshal(resp.Json, &r)
+	resp, err := txn.Query(ctx, q)
 	if err != nil {
-		log.Fatal(err)
+		return r, err
 	}
 
-	return r
+	err = json.Unmarshal(resp.Json, r)
+	if err != nil {
+		return r, err
+	}
+	return r, nil
 }
 
 func getValidValues(s sql.NullString) string {
