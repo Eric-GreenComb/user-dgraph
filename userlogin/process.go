@@ -42,7 +42,7 @@ type userdata struct {
 var (
 	connUser = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
 		"192.168.17.29", "az170907", "readorder@321#", "tokopedia-user")
-	userids = make(map[string]userdata)
+	//userids = make(map[string]userdata)
 )
 
 type DynamoStreamRecord struct {
@@ -77,7 +77,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 	db, err := sql.Open("postgres", connUser)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Couldn't connect to postgres:", err)
 	}
 	defer db.Close()
 
@@ -94,7 +94,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 		_, ez := strconv.Atoi(uids)
 
 		if ez != nil {
-			log.Println("Got error:", ez)
+			log.Println("Uid is not numeric:", ez)
 			return
 		}
 	}
@@ -102,7 +102,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 	shaHash := getFingerprintHash(request, uids)
 	nos, err := getPhoneNos(request)
 	if err != nil {
-		log.Println(err)
+		log.Println("Error in getting phonenos from image:", err)
 		return
 	}
 
@@ -112,7 +112,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 		c := dgraph.GetClient()
 		udata, err := getUserDetails(uids, db)
 		if err != nil {
-			log.Println(uids, err)
+			log.Println("Postgres error for uid:", uids, err)
 			return
 		}
 		writetoDgraph(ctx, c, uids, udata, shaHash, nos)
@@ -355,11 +355,11 @@ func getClientNumber(arr []byte) (string, error) {
 
 func getUserDetails(uid string, db *sql.DB) (userdata, error) {
 
-	c, ok := userids[uid]
+	/*c, ok := userids[uid]
 
 	if ok {
 		return c, nil
-	}
+	}*/
 
 	err := db.Ping()
 
@@ -385,7 +385,7 @@ func getUserDetails(uid string, db *sql.DB) (userdata, error) {
 		}
 	}
 
-	log.Println("Bd = ", bd)
-	userids[uid] = bd
+	log.Println("UserFromDB = ", bd)
+	//userids[uid] = bd
 	return bd, nil
 }
