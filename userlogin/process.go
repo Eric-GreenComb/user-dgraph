@@ -305,7 +305,7 @@ func searchDGraph(ctx context.Context, cl *client.Dgraph, q string) (Result, err
 		return r, err
 	}
 
-	err = json.Unmarshal(resp.Json, r)
+	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {
 		return r, err
 	}
