@@ -184,7 +184,8 @@ func concatName(lo string, la string) string {
 func LoadRideData(ctx context.Context, record *DynamoStreamRecord) {
 	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadRideData:")
 	c := record.NewImage
-	if c.Status.Value == "completed" {
+	o := record.OldImage
+	if o.Status.Value != "completed" && c.Status.Value == "completed" {
 		log.Println("Got completed ride:", c)
 		cl := dgraph.GetClient()
 		writeToDgraph(ctx, cl, c)
@@ -205,7 +206,7 @@ func writeToDgraph(ctx context.Context, ct *client.Dgraph, d Data) {
 	var r Root
 	err = json.Unmarshal(resp.Json, &r)
 	if err != nil {
-		log.Println(err)
+		log.Println("SearchDgraph Error:", err)
 		return
 	}
 
