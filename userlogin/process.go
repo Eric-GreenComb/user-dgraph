@@ -159,7 +159,7 @@ func getFingerprintHash(js []byte, uids string) []string {
 
 	}, "OldImage", "user_data", "M", "filtron", "M", "uuid_"+uids, "M", "fingerprint_data", "L")
 
-	log.Println("OldAndNewImageFingerprint:", oldShaHash, newShaHash)
+	//log.Println("OldAndNewImageFingerprint:", oldShaHash, newShaHash)
 
 	if len(oldShaHash) != len(newShaHash) {
 		return newShaHash
@@ -219,7 +219,7 @@ func getPhoneNos(js []byte) ([]string, error) {
 		}
 	}
 
-	log.Println("OldAndNewImagePhone:", oldPhoneNos, newPhoneNos)
+	//log.Println("OldAndNewImagePhone:", oldPhoneNos, newPhoneNos)
 	if len(oldPhoneNos) != len(newPhoneNos) {
 		return newPhoneNos, nil
 	}
@@ -328,6 +328,8 @@ func upsertPhone(ctx context.Context, cl *client.Dgraph, r Result, usr userdata,
 	err := dgraph.RetryMutate(ctx, cl, q, dgraph.DGraphMutationRetryCount)
 	if err != nil {
 		log.Println(q, err)
+	} else {
+		log.Println("Successfully pushed to dgraph.")
 	}
 	return err
 }
@@ -368,6 +370,8 @@ func upsertFingerprint(ctx context.Context, cl *client.Dgraph, r Result, usr use
 	err := dgraph.RetryMutate(ctx, cl, q, dgraph.DGraphMutationRetryCount)
 	if err != nil {
 		log.Println(q, err)
+	} else {
+		log.Println("Successfully pushed to dgraph.")
 	}
 	return err
 }

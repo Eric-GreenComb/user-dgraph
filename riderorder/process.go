@@ -422,5 +422,7 @@ func upsertData(ctx context.Context, cl *client.Dgraph, r Root, c Data) {
 	if err != nil {
 		log.Println(q, err)
 		return
+	} else {
+		log.Println("Successfully pushed to dgraph.")
 	}
 }
