@@ -159,6 +159,8 @@ func getFingerprintHash(js []byte, uids string) []string {
 
 	}, "OldImage", "user_data", "M", "filtron", "M", "uuid_"+uids, "M", "fingerprint_data", "L")
 
+	log.Println("OldAndNewImageFingerprint:", oldShaHash, newShaHash)
+
 	if len(oldShaHash) != len(newShaHash) {
 		return newShaHash
 	}
@@ -217,6 +219,7 @@ func getPhoneNos(js []byte) ([]string, error) {
 		}
 	}
 
+	log.Println("OldAndNewImagePhone:", oldPhoneNos, newPhoneNos)
 	if len(oldPhoneNos) != len(newPhoneNos) {
 		return newPhoneNos, nil
 	}
