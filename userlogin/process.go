@@ -17,6 +17,7 @@ import (
 	"github.com/tokopedia/user-dgraph/riderorder"
 	"github.com/tokopedia/user-dgraph/utils"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -121,7 +122,8 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 }
 
 func getFingerprintHash(js []byte, uids string) []string {
-	shaHash := make([]string, 0)
+	newShaHash := make([]string, 0)
+	oldShaHash := make([]string, 0)
 
 	jsonparser.ArrayEach(js, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 
@@ -134,18 +136,55 @@ func getFingerprintHash(js []byte, uids string) []string {
 				strings.Contains(string(s[:]), "iPhone") {
 				hasher := sha1.New()
 				hasher.Write(finger)
-				shaHash = append(shaHash, hex.EncodeToString(hasher.Sum(nil)))
+				newShaHash = append(newShaHash, hex.EncodeToString(hasher.Sum(nil)))
 			}
 		}
 
 	}, "NewImage", "user_data", "M", "filtron", "M", "uuid_"+uids, "M", "fingerprint_data", "L")
 
-	return shaHash
+	jsonparser.ArrayEach(js, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+
+		finger, _, _, e3 := jsonparser.Get(value, "S")
+
+		if e3 == nil {
+			s, _ := base64.StdEncoding.DecodeString(fmt.Sprintf("%s", finger))
+
+			if strings.Contains(string(s[:]), "android") ||
+				strings.Contains(string(s[:]), "iPhone") {
+				hasher := sha1.New()
+				hasher.Write(finger)
+				oldShaHash = append(oldShaHash, hex.EncodeToString(hasher.Sum(nil)))
+			}
+		}
+
+	}, "OldImage", "user_data", "M", "filtron", "M", "uuid_"+uids, "M", "fingerprint_data", "L")
+
+	if len(oldShaHash) != len(newShaHash) {
+		return newShaHash
+	}
+	sort.Strings(oldShaHash)
+	sort.Strings(newShaHash)
+
+	allEqual := true
+
+	for i, _ := range newShaHash {
+		if newShaHash[i] != oldShaHash[i] {
+			allEqual = false
+			break
+		}
+	}
+
+	if allEqual {
+		return make([]string, 0)
+	}
+
+	return newShaHash
 }
 
 func getPhoneNos(js []byte) ([]string, error) {
 
-	phonenos := make([]string, 0)
+	newPhoneNos := make([]string, 0)
+	oldPhoneNos := make([]string, 0)
 	category := [4]string{"1", "2", "9", "20"}
 
 	for _, v := range category {
@@ -154,15 +193,50 @@ func getPhoneNos(js []byte) ([]string, error) {
 			clientno, err := getClientNumber(client)
 
 			if err != nil {
-				return phonenos, err
+				return newPhoneNos, err
 			}
 			if len(strings.TrimSpace(clientno)) > 0 {
-				phonenos = append(phonenos, clientno)
+				newPhoneNos = append(newPhoneNos, clientno)
 			}
 
 		}
 	}
-	return phonenos, nil
+
+	for _, v := range category {
+		client, _, _, e4 := jsonparser.Get(js, "OldImage", "user_data", "M", "digital", "M", "category_"+v, "M")
+		if e4 == nil {
+			clientno, err := getClientNumber(client)
+
+			if err != nil {
+				return newPhoneNos, err //Old Image is having issues so return newImage's phoneNos
+			}
+			if len(strings.TrimSpace(clientno)) > 0 {
+				oldPhoneNos = append(oldPhoneNos, clientno)
+			}
+
+		}
+	}
+
+	if len(oldPhoneNos) != len(newPhoneNos) {
+		return newPhoneNos, nil
+	}
+
+	sort.Strings(oldPhoneNos)
+	sort.Strings(newPhoneNos)
+
+	allEquals := true
+	for i, _ := range newPhoneNos {
+		if newPhoneNos[i] != oldPhoneNos[i] {
+			allEquals = false
+			break
+		}
+	}
+
+	if allEquals {
+		return make([]string, 0), nil
+	}
+
+	return newPhoneNos, nil
 }
 
 func writetoDgraph(ctx context.Context, ct *client.Dgraph, userid string, usr userdata, finger []string, phones []string) {
