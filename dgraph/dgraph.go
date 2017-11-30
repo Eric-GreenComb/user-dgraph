@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"log"
 	"strings"
+	"time"
 )
 
 var dgraphhost = "10.0.11.162:7080" //"localhost:9080"
@@ -48,11 +49,13 @@ func GetClient() *client.Dgraph {
 }
 
 func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter int) error {
+	totalCount := counter
 	for counter > 0 {
 		err := doMutate(ctx, cl, query)
 		if err != nil {
 			if strings.Contains(err.Error(), "Transaction aborted") {
 				counter--
+				time.Sleep(10 * time.Millisecond)
 			} else {
 				return err
 			}
@@ -61,7 +64,7 @@ func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter i
 		}
 	}
 	if counter == 0 {
-		return errors.New(fmt.Sprintf("Tried transaction commit for %d times but couldn't commit.", counter))
+		return errors.New(fmt.Sprintf("Tried transaction commit for %d times but couldn't commit.", totalCount))
 	}
 	return nil
 }

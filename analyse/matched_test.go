@@ -178,8 +178,8 @@ func writeSrnsCashbackData(srnsString string, db *sql.DB, cashbackF *os.File) {
 
 func TestMatchedCasesV3(t *testing.T) {
 	defer utils.PrintTimeElapsed(time.Now(), "Total time spent:")
-	dir := "/Users/ajayk/Documents/dgraph/dropshippers"
-	matchedFPath := dir + "/compareResultsNotMatch_2.txt"
+	dir := "/Users/ajayk/Documents/dgraph/dropshippers/analysis"
+	matchedFPath := dir + "/soron_all_srns.txt"
 
 	matchedF, err := os.Open(matchedFPath)
 	if err != nil {
@@ -190,7 +190,7 @@ func TestMatchedCasesV3(t *testing.T) {
 	db, err := sql.Open("postgres", connDataWH)
 	scanner := bufio.NewScanner(matchedF)
 
-	cashbackF, err := os.Create(dir + "/cashback_NotMatch.txt")
+	cashbackF, err := os.Create(dir + "/cashback_all_soron.txt")
 	defer cashbackF.Close()
 
 	counter := 0
@@ -213,7 +213,7 @@ func TestMatchedCasesV3(t *testing.T) {
 
 func writeSrnsCashbackDataV2(srnsString string, db *sql.DB, cashbackF *os.File) {
 	srnsString = srnsString[:len(srnsString)-1]
-	q := fmt.Sprintf(`SELECT payment_id, item_price, shipping_ref_num, create_time FROM ws_order WHERE shipping_ref_num IN (%s) ORDER BY create_time`, srnsString)
+	q := fmt.Sprintf(`SELECT payment_id, item_price, shipping_ref_num, create_time, phone FROM ws_order WHERE shipping_ref_num IN (%s) ORDER BY create_time`, srnsString)
 	rows, err := db.Query(q)
 	if err != nil {
 		log.Fatal(err)
@@ -223,13 +223,15 @@ func writeSrnsCashbackDataV2(srnsString string, db *sql.DB, cashbackF *os.File) 
 	SRNsPaymentMap := make(map[string][]string)
 	paymentIdPriceMap := make(map[string]string)
 	paymentIdCreateTimeMap := make(map[string]string)
+	paymentIdPhoneMap := make(map[string]string)
 	paymentIdStr := ""
 	for rows.Next() {
 		var paymentId string
 		var itemPrice string
 		var srn string
 		var createTime string
-		if err = rows.Scan(&paymentId, &itemPrice, &srn, &createTime); err != nil {
+		var phone string
+		if err = rows.Scan(&paymentId, &itemPrice, &srn, &createTime, &phone); err != nil {
 			log.Fatal(err)
 		}
 
@@ -237,10 +239,11 @@ func writeSrnsCashbackDataV2(srnsString string, db *sql.DB, cashbackF *os.File) 
 		SRNsPaymentMap[srn] = append(SRNsPaymentMap[srn], paymentId)
 		paymentIdCreateTimeMap[paymentId] = createTime
 		paymentIdStr += fmt.Sprintf("'%s',", paymentId)
+		paymentIdPhoneMap[paymentId] = phone
 	}
 	paymentIdStr = paymentIdStr[:len(paymentIdStr)-1]
 
-	q = fmt.Sprintf(`select payment_id, cashback_tokocash_given_amount from promo_code_usage_orders where payment_id in (%s)`, paymentIdStr)
+	q = fmt.Sprintf(`select payment_id, cashback_tokocash_given_amount, promo_id from promo_code_usage_orders where payment_id in (%s)`, paymentIdStr)
 	anotherRows, err := db.Query(q)
 	if err != nil {
 		log.Fatal(err)
@@ -248,20 +251,32 @@ func writeSrnsCashbackDataV2(srnsString string, db *sql.DB, cashbackF *os.File) 
 	defer anotherRows.Close()
 
 	pIdCashbackMap := make(map[string]string)
+	pIdPromoIdMap := make(map[string]string)
 
 	for anotherRows.Next() {
-		var paymentId, cashback string
-		if err = anotherRows.Scan(&paymentId, &cashback); err != nil {
+		var paymentId, cashback, promoId string
+		if err = anotherRows.Scan(&paymentId, &cashback, &promoId); err != nil {
 			log.Fatal(err)
 		}
 		pIdCashbackMap[paymentId] = cashback
+		pIdPromoIdMap[paymentId] = promoId
 	}
 
 	for srn, pIds := range SRNsPaymentMap {
-		msg := srn + ","
+		var phones []string
+		msg := ""
 		for _, pId := range pIds {
-			msg += fmt.Sprintf("%s,%s,%s,%s,", pId, paymentIdPriceMap[pId], pIdCashbackMap[pId], paymentIdCreateTimeMap[pId])
+			phone := utils.NormalizePhone(paymentIdPhoneMap[pId])
+			msg += fmt.Sprintf("%s,%s,%s,%s,%s,%s,", pId, paymentIdPriceMap[pId], pIdCashbackMap[pId], paymentIdCreateTimeMap[pId], phone, pIdPromoIdMap[pId])
+			phones = append(phones, phone)
 		}
+
+		if utils.AllEqual(phones) {
+			msg = fmt.Sprintf(",T,") + msg
+		} else {
+			msg = fmt.Sprintf(",F,") + msg
+		}
+		msg = srn + msg
 		cashbackF.WriteString(msg + "\n")
 	}
 }

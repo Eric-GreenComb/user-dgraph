@@ -1,18 +1,10 @@
 package utils
 
 import (
-	"fmt"
+	"log"
 	"testing"
 )
 
 func TestHashSetToCSVString(t *testing.T) {
-	m := make(map[string]string)
-	m["asd"] = "as"
-	m["ad"] = "asd"
-	m["ge"] = "SAd"
-	//fmt.Println(HashSetStringToCSVString(m))
-
-	if m["gk"] == "" {
-		fmt.Println("right")
-	}
+	log.Println(">" + NormalizePhone("6282713872823"))
 }
