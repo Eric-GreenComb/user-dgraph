@@ -1,6 +1,6 @@
-package phone
+package dgraphmodels
 
-type DGraphModel struct {
+type PhoneDGraph struct {
 	UID         string `json:"uid,omitempty"`
 	Name        string `json:"name,omitempty"`
 	PhoneNumber string `json:"phone_number"`

@@ -1,4 +1,4 @@
-package referrals
+package dgraphmodels
 
 import (
 	"context"
@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/tokopedia/user-dgraph/dgraph"
-	"github.com/tokopedia/user-dgraph/dgraphmodels/fingerprint"
-	"github.com/tokopedia/user-dgraph/dgraphmodels/phone"
-	"github.com/tokopedia/user-dgraph/dgraphmodels/users"
 	"log"
 )
 
@@ -22,15 +19,15 @@ import (
         user_id: int @index(int) .
 */
 
-type DGraphModel struct {
-	UID             string                    `json:"uid,omitempty"`
-	Name            string                    `json:"name,omitempty"`
-	RefCode         string                    `json:"ref_code,omitempty"`
-	GeneratedBy     []phone.DGraphModel       `json:"GeneratedBy,omitempty"`
-	AppliedByDevice []fingerprint.DGraphModel `json:"AppliedByDevice,omitempty"`
+type ReferralDGraph struct {
+	UID             string              `json:"uid,omitempty"`
+	Name            string              `json:"name,omitempty"`
+	RefCode         string              `json:"ref_code,omitempty"`
+	GeneratedBy     []PhoneDGraph       `json:"GeneratedBy,omitempty"`
+	AppliedByDevice []FingerprintDGraph `json:"AppliedByDevice,omitempty"`
 }
 
-func GetAdvocateDetails(ctx context.Context, c *client.Dgraph, code string) (DGraphModel, error) {
+func GetAdvocateDetails(ctx context.Context, c *client.Dgraph, code string) (ReferralDGraph, error) {
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -48,16 +45,16 @@ func GetAdvocateDetails(ctx context.Context, c *client.Dgraph, code string) (DGr
 	resp, err := txn.Query(ctx, q)
 	if err != nil {
 		log.Println(q, err)
-		return DGraphModel{}, err
+		return ReferralDGraph{}, err
 	}
 
 	var referralCodeDecode struct {
-		ReferralCode DGraphModel `json:"get_referral_advocate"`
+		ReferralCode ReferralDGraph `json:"get_referral_advocate"`
 	}
 
 	if err := json.Unmarshal(resp.GetJson(), &referralCodeDecode); err != nil {
 		log.Println(resp, err)
-		return DGraphModel{}, err
+		return ReferralDGraph{}, err
 	}
 
 	return referralCodeDecode.ReferralCode, nil
@@ -93,10 +90,10 @@ func SearchAndInsert(ctx context.Context, code, phone, fingerPrintData string, u
 	}
 
 	var decodeObj struct {
-		Referrals    []DGraphModel             `json:"referral"`
-		Advocates    []users.DGraphModel       `json:"advocate"`
-		Fingerprints []fingerprint.DGraphModel `json:"device_meta"`
-		PhoneNumbers []phone.DGraphModel       `json:"phone_number"`
+		Referrals    []ReferralDGraph    `json:"referral"`
+		Advocates    []UserDGraph        `json:"advocate"`
+		Fingerprints []FingerprintDGraph `json:"device_meta"`
+		PhoneNumbers []PhoneDGraph       `json:"phone_number"`
 	}
 
 	err = json.Unmarshal(resp.Json, &decodeObj)
@@ -162,7 +159,7 @@ func SearchAndInsert(ctx context.Context, code, phone, fingerPrintData string, u
 	return err
 }
 
-func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]users.DGraphModel, error) {
+func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]UserDGraph, error) {
 	q := fmt.Sprintf(`{
 		referral(func: eq(ref_code, %q)) {
 			uid
@@ -186,7 +183,7 @@ func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]users.D
 	}
 
 	var decodeObj struct {
-		Referrals []DGraphModel `json:"referral"`
+		Referrals []ReferralDGraph `json:"referral"`
 	}
 	//TODO: Define a datatype to get the users for DGraph
 	err = json.Unmarshal(resp.Json, &decodeObj)
@@ -196,14 +193,14 @@ func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]users.D
 	}
 
 	if len(decodeObj.Referrals) == 0 {
-		return []users.DGraphModel{}, nil
+		return []UserDGraph{}, nil
 	}
 
 	if len(decodeObj.Referrals[0].AppliedByDevice) == 0 {
-		return []users.DGraphModel{}, nil
+		return []UserDGraph{}, nil
 	}
 
-	var userDgraphModels []users.DGraphModel
+	var userDgraphModels []UserDGraph
 
 	for _, d := range decodeObj.Referrals[0].AppliedByDevice {
 		userDgraphModels = append(userDgraphModels, d.Users...)

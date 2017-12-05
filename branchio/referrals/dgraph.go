@@ -1,15 +1,5 @@
 package referrals
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/tokopedia/user-dgraph/dgraph"
-	"github.com/tokopedia/user-dgraph/dgraphdata"
-	"log"
-)
-
 /**
 		ref_code: string @index(exact) .
         device_meta_data: string @index(exact) .
@@ -35,6 +25,7 @@ import (
         _:dev1 <FingerPrint> _:u1 .
         _:dev2 <FingerPrint> _:u2 .
 */
+/*
 func SearchAndInsert(ctx context.Context, code, phone, fingerPrintData string, userid int64, cl *client.Dgraph) error {
 
 	q := `
@@ -133,3 +124,4 @@ func SearchAndInsert(ctx context.Context, code, phone, fingerPrintData string, u
 	}
 	return err
 }
+*/

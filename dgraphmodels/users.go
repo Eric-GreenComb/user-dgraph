@@ -1,4 +1,4 @@
-package users
+package dgraphmodels
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/tokopedia/user-dgraph/dgraphmodels/fingerprint"
 	"log"
 )
 
@@ -15,11 +14,11 @@ type GetUser struct {
 	Userid int64  `json:"user_id"`
 }
 
-type DGraphModel struct {
-	Uid          string                    `json:"uid,omitempty"`
-	Name         string                    `json:"name,omitempty"`
-	UserId       int64                     `json:"user_id,omitempty"`
-	Fingerprints []fingerprint.DGraphModel `json:"DeviceFingerPrint,omitempty"`
+type UserDGraph struct {
+	Uid          string              `json:"uid,omitempty"`
+	Name         string              `json:"name,omitempty"`
+	UserId       int64               `json:"user_id,omitempty"`
+	Fingerprints []FingerprintDGraph `json:"DeviceFingerPrint,omitempty"`
 }
 
 func GetUsersUIDs(useridscsv string, c *client.Dgraph) ([]GetUser, error) {
@@ -54,7 +53,7 @@ func GetUsersUIDs(useridscsv string, c *client.Dgraph) ([]GetUser, error) {
 //Returns uid of newly created user
 func CreateUser(userid int64, c *client.Dgraph) (string, error) {
 	ctx := context.Background()
-	u := DGraphModel{
+	u := UserDGraph{
 		Name:   "USER",
 		UserId: userid,
 	}

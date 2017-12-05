@@ -1,4 +1,4 @@
-package srns
+package dgraphmodels
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/tokopedia/user-dgraph/dgraphmodels/users"
 	"log"
 )
 
@@ -14,12 +13,12 @@ type GetSRN struct {
 	Uid        string `json:"uid"`
 	ShipRefNum string `json:"ship_ref_num"`
 }
-type DGraphModel struct {
-	Uid        string            `json:"uid,omitempty"`
-	Name       string            `json:"name,omitempty"`
-	ShipRefNum string            `json:"ship_ref_num,omitempty"`
-	Buyer      users.DGraphModel `json:"buyer,omitempty"`
-	Seller     users.DGraphModel `json:"seller,omitempty"`
+type SRNsDGraph struct {
+	Uid        string     `json:"uid,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	ShipRefNum string     `json:"ship_ref_num,omitempty"`
+	Buyer      UserDGraph `json:"buyer,omitempty"`
+	Seller     UserDGraph `json:"seller,omitempty"`
 }
 
 func GetSRNUIDs(srnscsv string, c *client.Dgraph) ([]GetSRN, error) {
@@ -53,7 +52,7 @@ func GetSRNUIDs(srnscsv string, c *client.Dgraph) ([]GetSRN, error) {
 //Returns uid of newly created SRN
 func CreateSRN(srn string, c *client.Dgraph) (string, error) {
 	ctx := context.Background()
-	srndgraph := DGraphModel{
+	srndgraph := SRNsDGraph{
 		Name:       "ShippingRefNumber",
 		ShipRefNum: srn,
 	}
@@ -74,10 +73,10 @@ func CreateSRN(srn string, c *client.Dgraph) (string, error) {
 
 func CreateRelation(srnuid, buyeruid, selleruid string, c *client.Dgraph) error {
 	ctx := context.Background()
-	s := DGraphModel{
+	s := SRNsDGraph{
 		Uid:    srnuid,
-		Buyer:  users.DGraphModel{Uid: buyeruid},
-		Seller: users.DGraphModel{Uid: selleruid},
+		Buyer:  UserDGraph{Uid: buyeruid},
+		Seller: UserDGraph{Uid: selleruid},
 	}
 	mu := &protos.Mutation{CommitNow: true}
 	srnjson, err := json.Marshal(s)
