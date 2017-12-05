@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/tokopedia/user-dgraph/dgraph/fingerprint"
+	"github.com/tokopedia/user-dgraph/dgraphmodels/fingerprint"
 	"log"
 )
 

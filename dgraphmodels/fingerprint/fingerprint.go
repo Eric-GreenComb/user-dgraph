@@ -1,6 +1,6 @@
 package fingerprint
 
-import "github.com/tokopedia/user-dgraph/dgraph/users"
+import "github.com/tokopedia/user-dgraph/dgraphmodels/users"
 
 type DGraphModel struct {
 	UID             string              `json:"uid,omitempty"`

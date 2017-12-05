@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/tokopedia/user-dgraph/dgraph"
-	"github.com/tokopedia/user-dgraph/dgraph/fingerprint"
-	"github.com/tokopedia/user-dgraph/dgraph/phone"
-	"github.com/tokopedia/user-dgraph/dgraph/users"
+	"github.com/tokopedia/user-dgraph/dgraphmodels/fingerprint"
+	"github.com/tokopedia/user-dgraph/dgraphmodels/phone"
+	"github.com/tokopedia/user-dgraph/dgraphmodels/users"
 	"log"
 )
 
@@ -196,10 +196,20 @@ func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]users.D
 	}
 
 	if len(decodeObj.Referrals) == 0 {
-		return nil, nil
+		return []users.DGraphModel{}, nil
 	}
 
-	devices := decodeObj.Referrals[0].AppliedByDevice
+	if len(decodeObj.Referrals[0].AppliedByDevice) == 0 {
+		return []users.DGraphModel{}, nil
+	}
+
+	var userDgraphModels []users.DGraphModel
+
+	for _, d := range decodeObj.Referrals[0].AppliedByDevice {
+		userDgraphModels = append(userDgraphModels, d.Users...)
+	}
+
+	return userDgraphModels, nil
 }
 
 //
