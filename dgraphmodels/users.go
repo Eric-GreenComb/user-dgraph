@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	protos "github.com/dgraph-io/dgraph/protos/api"
 	"log"
 )
 

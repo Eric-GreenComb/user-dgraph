@@ -13,6 +13,7 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/dgraph-io/dgraph/client"
 	_ "github.com/lib/pq"
+	"github.com/tokopedia/user-dgraph/database"
 	"github.com/tokopedia/user-dgraph/dgraph"
 	"github.com/tokopedia/user-dgraph/riderorder"
 	"github.com/tokopedia/user-dgraph/utils"
@@ -40,11 +41,13 @@ type userdata struct {
 	user_name     sql.NullString
 }
 
+/*
 var (
 	connUser = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
 		"192.168.17.29", "az170907", "readorder@321#", "tokopedia-user")
 	//userids = make(map[string]userdata)
 )
+*/
 
 type DynamoStreamRecord struct {
 	Keys     map[string]map[string]string `json:"Keys"`
@@ -75,12 +78,12 @@ func GetBytes(key interface{}) ([]byte, error) {
 
 func LoadUserLoginData(ctx context.Context, request []byte) {
 	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadUserLoginData:")
-	db, err := sql.Open("postgres", connUser)
+	/*db, err := sql.Open("postgres", connUser)
 
 	if err != nil {
 		log.Fatal("Couldn't connect to postgres:", err)
 	}
-	defer db.Close()
+	defer db.Close()*/
 
 	uid, err := jsonparser.GetString(request, "NewImage", "uid", "S")
 	if err != nil {
@@ -111,7 +114,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 
 	if len(nos) > 0 || len(shaHash) > 0 {
 		c := dgraph.GetClient()
-		udata, err := getUserDetails(uids, db)
+		udata, err := getUserDetails(uids)
 		if err != nil {
 			log.Println("Postgres error for uid:", uids, err)
 			return
@@ -434,14 +437,17 @@ func getClientNumber(arr []byte) (string, error) {
 	return "", nil
 }
 
-func getUserDetails(uid string, db *sql.DB) (userdata, error) {
+func getUserDetails(uid string) (userdata, error) {
 
 	/*c, ok := userids[uid]
 
 	if ok {
 		return c, nil
 	}*/
-
+	db := database.UserDbCon
+	if db == nil {
+		log.Fatal("Don't have db connection yet.")
+	}
 	err := db.Ping()
 
 	if err != nil {
@@ -454,7 +460,12 @@ func getUserDetails(uid string, db *sql.DB) (userdata, error) {
 
 	var bd userdata
 
-	rows, err := db.Query(query, uid)
+	err = db.QueryRow(query, uid).Scan(&bd.user_name, &bd.user_email_id)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	/*rows, err := db.Query(query, uid)
 	if err != nil {
 		return userdata{}, err
 	}
@@ -465,6 +476,11 @@ func getUserDetails(uid string, db *sql.DB) (userdata, error) {
 			return userdata{}, err
 		}
 	}
+
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}*/
 
 	log.Println("UserFromDB = ", bd)
 	//userids[uid] = bd

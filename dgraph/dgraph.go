@@ -5,17 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
+	"github.com/dgraph-io/dgraph/y"
 	"google.golang.org/grpc"
 	"log"
-	"strings"
 	"time"
 )
 
 var dgraphhost = "10.255.151.17:7080" //<- DCI//"10.0.11.162:7080" //<-Aws //"localhost:9080"
 const (
 	QueryThreshold           = 10000
-	DGraphMutationRetryCount = 10
+	DGraphMutationRetryCount = 20
 )
 
 var c *client.Dgraph
@@ -28,16 +28,16 @@ func newClient() *client.Dgraph {
 		log.Fatal(err)
 	}
 	return client.NewDgraphClient(
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
 	)
 }
 
@@ -53,7 +53,7 @@ func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter i
 	for counter > 0 {
 		err := doMutate(ctx, cl, query)
 		if err != nil {
-			if strings.Contains(err.Error(), "Transaction aborted") {
+			if err == y.ErrAborted {
 				counter--
 				time.Sleep(10 * time.Millisecond)
 			} else {
@@ -73,11 +73,20 @@ func doMutate(ctx context.Context, cl *client.Dgraph, query string) error {
 	txn := cl.NewTxn()
 	defer txn.Discard(ctx)
 
-	mu := &protos.Mutation{SetNquads: []byte(query)}
+	mu := &api.Mutation{SetNquads: []byte(query)}
 	_, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		return err
 	}
 	err = txn.Commit(ctx)
+	return err
+}
+
+func DropAll() error {
+	c := GetClient()
+	err := c.Alter(context.Background(), &api.Operation{DropAll: true})
+	if err != nil {
+		log.Println("Error while DropAll:", err)
+	}
 	return err
 }
