@@ -96,7 +96,7 @@ func main() {
 	})
 
 	router.POST("/restricted/dropall", func(context *gin.Context) {
-		err := promotion.DropAll()
+		err := dgraph.DropAll()
 		if err != nil {
 			context.JSON(512, fmt.Sprintf("{'result':'failed', 'message':'%v'}", err))
 		} else {

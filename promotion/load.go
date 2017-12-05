@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	//"github.com/dgraph-io/dgraph/protos"
 	"github.com/tokopedia/user-dgraph/dgraph"
 	"github.com/tokopedia/user-dgraph/utils"
 	"io/ioutil"
@@ -263,15 +263,6 @@ func GetShopSellerMap(path string) (map[int64]int64, error) {
 		shopSellerMap[shopid] = sellerid
 	}
 	return shopSellerMap, nil
-}
-
-func DropAll() error {
-	c := dgraph.GetClient()
-	err := c.Alter(context.Background(), &protos.Operation{DropAll: true})
-	if err != nil {
-		log.Println("Error while DropAll:", err)
-	}
-	return err
 }
 
 func CreateRelationships(promoDataList []PromoData, shopSellerMap map[int64]int64, userUidMap map[int64]string, srnUidMap map[string]string, c *client.Dgraph) error {

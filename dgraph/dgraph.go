@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"google.golang.org/grpc"
 	"log"
 	"strings"
@@ -28,16 +28,16 @@ func newClient() *client.Dgraph {
 		log.Fatal(err)
 	}
 	return client.NewDgraphClient(
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
-		protos.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
+		api.NewDgraphClient(d),
 	)
 }
 
@@ -73,11 +73,20 @@ func doMutate(ctx context.Context, cl *client.Dgraph, query string) error {
 	txn := cl.NewTxn()
 	defer txn.Discard(ctx)
 
-	mu := &protos.Mutation{SetNquads: []byte(query)}
+	mu := &api.Mutation{SetNquads: []byte(query)}
 	_, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		return err
 	}
 	err = txn.Commit(ctx)
+	return err
+}
+
+func DropAll() error {
+	c := GetClient()
+	err := c.Alter(context.Background(), &api.Operation{DropAll: true})
+	if err != nil {
+		log.Println("Error while DropAll:", err)
+	}
 	return err
 }
