@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/tokopedia/user-dgraph/dgraph"
+	"github.com/tokopedia/user-dgraph/dgraph/users"
 	"github.com/tokopedia/user-dgraph/utils"
 	"io/ioutil"
 	"log"
@@ -18,9 +19,9 @@ import (
 )
 
 type BuyerRoot struct {
-	Buyer  []UserDgraph     `json:"buyer"`
-	AWB    []ShippingRefNum `json:"awb"`
-	Seller []UserDgraph     `json:"seller"`
+	Buyer  []users.DGraphModel `json:"buyer"`
+	AWB    []ShippingRefNum    `json:"awb"`
+	Seller []users.DGraphModel `json:"seller"`
 }
 
 type ShippingRefNum struct {

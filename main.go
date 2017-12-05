@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 
 	"context"
+	"github.com/tokopedia/user-dgraph/branchio"
 )
 
 func main() {
@@ -111,6 +112,20 @@ func main() {
 		} else {
 			context.JSON(200, "{'result':'ok'}")
 		}
+	})
+
+	router.POST("/dgraph/push/branch-io", func(ginContext *gin.Context) {
+		var req []byte
+		req, err := ioutil.ReadAll(ginContext.Request.Body)
+		if err != nil {
+			log.Println("fail to read request data")
+			return
+		}
+
+		ctx := context.Background()
+		branchio.LoadData(ctx, req)
+		ginContext.JSON(200, "{'result':'ok'}")
+
 	})
 
 	router.Run(":" + port)

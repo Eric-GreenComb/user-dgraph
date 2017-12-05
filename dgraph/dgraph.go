@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var dgraphhost = "10.0.11.162:7080" //"localhost:9080"
+var dgraphhost = "10.255.151.17:7080" //<- DCI//"10.0.11.162:7080" //<-Aws //"localhost:9080"
 const (
 	QueryThreshold           = 10000
 	DGraphMutationRetryCount = 10

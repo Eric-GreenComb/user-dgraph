@@ -8,6 +8,8 @@ import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/tokopedia/user-dgraph/dgraph"
+	"github.com/tokopedia/user-dgraph/dgraph/srns"
+	"github.com/tokopedia/user-dgraph/dgraph/users"
 	"github.com/tokopedia/user-dgraph/utils"
 	"io/ioutil"
 	"log"
@@ -97,7 +99,7 @@ func LoadData(dir string) error {
 		}
 
 		useridscsv := utils.StringListToCSVString(uniqueUsersList[fromidx:toidx])
-		usersuids, err := GetUsersUIDs(useridscsv, c)
+		usersuids, err := users.GetUsersUIDs(useridscsv, c)
 		if err != nil {
 			return err
 		}
@@ -126,7 +128,7 @@ func LoadData(dir string) error {
 		useridi, _ := strconv.ParseInt(userid, 10, 64)
 		if userUIDMap[useridi] == "" {
 			//go func(userid int64) {
-			uid, err := CreateUser(useridi, c)
+			uid, err := users.CreateUser(useridi, c)
 			//	errchan <- err
 			//	uidchan <- UserIdUid{useridi, uid}
 			//}(useridi)
@@ -169,7 +171,7 @@ func LoadData(dir string) error {
 		}
 
 		srnscsv := utils.StringListToCSVString(uniqueSrnsList[fromidx:toidx])
-		srnUids, err := GetSRNUIDs(srnscsv, c)
+		srnUids, err := srns.GetSRNUIDs(srnscsv, c)
 		if err != nil {
 			return err
 		}
@@ -189,7 +191,7 @@ func LoadData(dir string) error {
 	log.Println("SRNCreation started at:", starttime)
 	for _, srn := range uniqueSrnsList {
 		if srnUIDmap[srn] == "" {
-			uid, err := CreateSRN(srn, c)
+			uid, err := srns.CreateSRN(srn, c)
 			if err != nil {
 				return err
 			}
@@ -297,7 +299,7 @@ func CreateRelationships(promoDataList []PromoData, shopSellerMap map[int64]int6
 
 		//go func(srn, buyerUid, sellerUid string, c *client.Dgraph) {
 		//	defer wg.Done()
-		err := CreateRelation(srnUid, buyerUid, sellerUid, c)
+		err := srns.CreateRelation(srnUid, buyerUid, sellerUid, c)
 		if err != nil {
 			return err
 		}
