@@ -75,12 +75,6 @@ func GetBytes(key interface{}) ([]byte, error) {
 
 func LoadUserLoginData(ctx context.Context, request []byte) {
 	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadUserLoginData:")
-	db, err := sql.Open("postgres", connUser)
-
-	if err != nil {
-		log.Fatal("Couldn't connect to postgres:", err)
-	}
-	defer db.Close()
 
 	uid, err := jsonparser.GetString(request, "NewImage", "uid", "S")
 	if err != nil {
@@ -111,7 +105,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 
 	if len(nos) > 0 || len(shaHash) > 0 {
 		c := dgraph.GetClient()
-		udata, err := getUserDetails(uids, db)
+		udata, err := getUserDetails(uids)
 		if err != nil {
 			log.Println("Postgres error for uid:", uids, err)
 			return
@@ -434,7 +428,7 @@ func getClientNumber(arr []byte) (string, error) {
 	return "", nil
 }
 
-func getUserDetails(uid string, db *sql.DB) (userdata, error) {
+func getUserDetails(uid string) (userdata, error) {
 
 	/*c, ok := userids[uid]
 
@@ -442,7 +436,14 @@ func getUserDetails(uid string, db *sql.DB) (userdata, error) {
 		return c, nil
 	}*/
 
-	err := db.Ping()
+	db, err := sql.Open("postgres", connUser)
+
+	if err != nil {
+		log.Fatal("Couldn't connect to postgres:", err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
 
 	if err != nil {
 		log.Println("Error: Could not establish a connection with the database")
