@@ -9,7 +9,6 @@ import (
 	"github.com/dgraph-io/dgraph/y"
 	"google.golang.org/grpc"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -54,7 +53,7 @@ func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter i
 	for counter > 0 {
 		err := doMutate(ctx, cl, query)
 		if err != nil {
-			if err.Error() == y.ErrAborted.Error() {
+			if err == y.ErrAborted {
 				counter--
 				time.Sleep(10 * time.Millisecond)
 			} else {
