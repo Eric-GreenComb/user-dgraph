@@ -54,7 +54,7 @@ func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter i
 	for counter > 0 {
 		err := doMutate(ctx, cl, query)
 		if err != nil {
-			if err == y.ErrAborted {
+			if err.Error() == y.ErrAborted.Error() {
 				counter--
 				time.Sleep(10 * time.Millisecond)
 			} else {
