@@ -123,7 +123,7 @@ func main() {
 		}
 
 		ctx := context.Background()
-		branchio.LoadData(ctx, req)
+		branchio.ProcessEvent(ctx, req)
 		ginContext.JSON(200, "{'result':'ok'}")
 
 	})

@@ -41,8 +41,8 @@ type Metadata struct {
 //Sample {"limited_ad_tracking_status":"0","metadata":{"key1":"value1","key2":"value2","key3":"value3","ip":"14.142.226.220"},"os":"Android",
 // "google_advertising_id":"11902479-1dc7-4205-804c-7bd2e8fcfe25","os_version":"26","event":"app share test",
 // "event_timestamp":"2017-11-29T09:37:27.822Z","hardware_id":"11902479-1dc7-4205-804c-7bd2e8fcfe25","ad_tracking_enabled":"true"}
-func LoadData(ctx context.Context, request []byte) {
-	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time LoadData:")
+func ProcessEvent(ctx context.Context, request []byte) {
+	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time ProcessEvent:")
 
 	eventData := EventData{}
 	err := json.Unmarshal(request, &eventData)
@@ -54,8 +54,47 @@ func LoadData(ctx context.Context, request []byte) {
 	if eventName == ReferralGenerationEvent {
 		storeReferralAdvocate(ctx, eventData)
 	} else if eventName == ReferralUtilizingEvent {
-
+		checkFraudAndInsert(ctx, eventData)
 	}
+}
+func checkFraudAndInsert(ctx context.Context, data EventData) {
+	code := data.Metadata.ReferralCode
+	phone := data.Metadata.Phone
+	if code == "" || phone == "" {
+		return
+	}
+
+	userId, err := strconv.ParseInt(data.Metadata.UserId, 10, 64)
+	if err != nil {
+		log.Println("UserId is not int64 convertible:", data.Metadata.UserId, err)
+		return
+	}
+
+	fingerprint, err := GenerateFingerprint(ctx, data)
+	if err != nil {
+		log.Println("Error while generating fingerprint for data:", data, err)
+		return
+	}
+
+	referralUid, deviceUid, userUid, appliedByDevices, err := dgraphmodels.GetExistingReferral(ctx, code, fingerprint, userId, dgraph.GetClient())
+
+	if len(appliedByDevices) != 0 {
+		log.Println("Fraud scenario.")
+		//TODO: Inform soron
+		//TODO: log somewhere
+		//TODO: slack update
+	}
+	if referralUid == "" {
+		log.Println("Not a valid referral code.")
+		return
+	}
+
+	err = dgraphmodels.InsertAppliedReferral(ctx, fingerprint, referralUid, deviceUid, userUid, userId, dgraph.GetClient())
+	if err != nil {
+		log.Println("Couldn't insert into the dgraph.", err)
+	}
+	return
+
 }
 
 func GenerateFingerprint(ctx context.Context, data EventData) (string, error) {

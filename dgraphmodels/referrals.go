@@ -159,7 +159,8 @@ func SearchAndInsertReferral(ctx context.Context, code, phone, fingerPrintData s
 	return err
 }
 
-func GetExistingReferral(ctx context.Context, code string, cl *client.Dgraph) (referralUid string, fraudUsers []UserDGraph, err error) {
+//TODO: Verify once below method
+func GetExistingReferral(ctx context.Context, code, fingerprintdata string, user_id int64, cl *client.Dgraph) (referralUid, deviceUid string, userUid string, appliedByDevices []FingerprintDGraph, err error) {
 	q := fmt.Sprintf(`{
 		referral(func: eq(ref_code, %q)) {
 			uid
@@ -172,45 +173,88 @@ func GetExistingReferral(ctx context.Context, code string, cl *client.Dgraph) (r
 				}
 			}
 		}
-		}`, code)
+		`, code)
+
+	if fingerprintdata != "" {
+		q += `device(func: eq(fingerprint_data, %q)){
+			uid
+		}
+		`
+	}
+
+	if user_id != 0 {
+		q += `user(func: eq(user_id, %q)){
+			uid
+		}
+		`
+	}
+
+	q += `}`
 
 	txn := cl.NewTxn()
 	resp, err := txn.Query(ctx, q)
 
 	if err != nil {
-		log.Println(fmt.Sprintf("Couldn't fetch referral(%s) from DGraph with error:%v", code, err))
-		return "", nil, err
+		log.Println(fmt.Sprintf("Couldn't fetch referral(%s)/fingerprint(%s)/user(%s) from DGraph with error:%v", code, fingerprintdata, user_id, err))
+		return "", "", "", nil, err
 	}
 
 	var decodeObj struct {
-		Referrals []ReferralDGraph `json:"referral"`
+		Referrals []ReferralDGraph    `json:"referral,omitempty"`
+		Device    []FingerprintDGraph `json:"device,omitempty"`
+		User      []UserDGraph        `json:"user,omitempty"`
 	}
-	//TODO: Define a datatype to get the users for DGraph
 	err = json.Unmarshal(resp.Json, &decodeObj)
 	if err != nil {
 		log.Println("Unmarshal error:", err)
-		return "", nil, err
+		return "", "", "", nil, err
 	}
 
 	if len(decodeObj.Referrals) == 0 {
-		return "", []UserDGraph{}, nil
+		return "", "", "", nil, nil
 	}
 
-	if len(decodeObj.Referrals[0].AppliedByDevice) == 0 {
-		return decodeObj.Referrals[0].UID, []UserDGraph{}, nil
-	}
-
-	//var userDgraphModels []UserDGraph
-
-	for _, d := range decodeObj.Referrals[0].AppliedByDevice {
-		fraudUsers = append(fraudUsers, d.Users...)
-	}
-
-	return decodeObj.Referrals[0].UID, fraudUsers, nil
+	return decodeObj.Referrals[0].UID, decodeObj.Device[0].UID, decodeObj.User[0].Uid, decodeObj.Referrals[0].AppliedByDevice, nil
 }
 
-func InsertAppliedReferral() {
+func InsertAppliedReferral(ctx context.Context, fingerprintData, referralUid, deviceUid, userUid string, userId int64, cl *client.Dgraph) error {
+	var r, d, u string
+	r = fmt.Sprintf("<%s>", referralUid)
+	q := ``
+	//First check if user present, if not then create it
+	//Check if device present, if not then create it
+	if userUid == "" {
+		u = "_:u"
+		q += fmt.Sprintf(`%v <user_id> %q .
+			%v <name> "USER" .
+			`, u, userId, u)
+	} else {
+		u = fmt.Sprintf("<%s>", userUid)
+	}
 
+	if deviceUid == "" {
+		d = "_:d"
+		q += fmt.Sprintf(`%v <fingerprint_data> %q .
+			%v <name> "FINGERPRINT" .
+			`, d, fingerprintData, d)
+	} else {
+		d = fmt.Sprintf("<%s>", deviceUid)
+	}
+
+	q += fmt.Sprintf(`%v <DeviceFingerPrint> %v .
+			`, u, d)
+	q += fmt.Sprintf(`%v <AppliedByDevice> %v .
+			`, r, d)
+
+	log.Println(q)
+
+	err := dgraph.RetryMutate(ctx, cl, q, dgraph.DGraphMutationRetryCount)
+	if err != nil {
+		log.Println(q, err)
+	} else {
+		log.Println("Successfully pushed to dgraph.")
+	}
+	return err
 }
 
 //
