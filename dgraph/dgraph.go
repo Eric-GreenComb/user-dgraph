@@ -73,7 +73,7 @@ func doMutate(ctx context.Context, cl *client.Dgraph, query string) error {
 	txn := cl.NewTxn()
 	defer txn.Discard(ctx)
 
-	mu := &api.Mutation{SetNquads: []byte(query)}
+	mu := &api.Mutation{SetNquads: []byte(query), IgnoreIndexConflict: true}
 	_, err := txn.Mutate(ctx, mu)
 	if err != nil {
 		return err
