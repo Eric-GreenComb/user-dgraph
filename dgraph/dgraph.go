@@ -16,7 +16,7 @@ var dgraphhost = "10.255.151.17:7080" //<- DCI//"10.0.11.162:7080" //<-Aws //"lo
 const (
 	QueryThreshold           = 10000
 	DGraphMutationRetryCount = 20
-	SleepTimeMSBeforeRetry   = 10
+	SleepTimeMSBeforeRetry   = 100
 )
 
 var c *client.Dgraph
