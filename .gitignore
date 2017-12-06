@@ -15,3 +15,5 @@
 
 .idea/
 logs/
+user-dgraph
+temp.log

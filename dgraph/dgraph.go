@@ -16,6 +16,7 @@ var dgraphhost = "10.255.151.17:7080" //<- DCI//"10.0.11.162:7080" //<-Aws //"lo
 const (
 	QueryThreshold           = 10000
 	DGraphMutationRetryCount = 20
+	SleepTimeMSBeforeRetry   = 100
 )
 
 var c *client.Dgraph
@@ -55,7 +56,7 @@ func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter i
 		if err != nil {
 			if err == y.ErrAborted {
 				counter--
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(SleepTimeMSBeforeRetry * time.Millisecond)
 			} else {
 				return err
 			}
