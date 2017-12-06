@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/tokopedia/user-dgraph/dgraph"
+	"github.com/tokopedia/user-dgraph/dgraphmodels"
 	"github.com/tokopedia/user-dgraph/utils"
 	"github.com/tokopedia/wallet-oauth/common/log"
+	"strconv"
 	"time"
 )
 
@@ -32,6 +35,7 @@ type Metadata struct {
 	Ip           string `json:"ip"`
 	ReferralCode string `json:"referral_code"`
 	UserId       string `json:"user_id"`
+	Phone        string `json:"phone"`
 }
 
 //Sample {"limited_ad_tracking_status":"0","metadata":{"key1":"value1","key2":"value2","key3":"value3","ip":"14.142.226.220"},"os":"Android",
@@ -64,5 +68,26 @@ func GenerateFingerprint(ctx context.Context, data EventData) (string, error) {
 }
 
 func storeReferralAdvocate(ctx context.Context, data EventData) {
+	code := data.Metadata.ReferralCode
+	phone := data.Metadata.Phone
+	if code == "" || phone == "" {
+		return
+	}
 
+	userId, err := strconv.ParseInt(data.Metadata.UserId, 10, 64)
+	if err != nil {
+		log.Println("UserId is not int64 convertible:", data.Metadata.UserId, err)
+		return
+	}
+
+	fingerprint, err := GenerateFingerprint(ctx, data)
+	if err != nil {
+		log.Println("Error while generating fingerprint for data:", data, err)
+		return
+	}
+
+	err = dgraphmodels.SearchAndInsertReferral(ctx, code, phone, fingerprint, userId, dgraph.GetClient())
+	if err != nil {
+		log.Println("Couldn't insert the referral code with error:", err)
+	}
 }

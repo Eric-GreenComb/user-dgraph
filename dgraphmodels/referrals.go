@@ -60,7 +60,7 @@ func GetAdvocateDetails(ctx context.Context, c *client.Dgraph, code string) (Ref
 	return referralCodeDecode.ReferralCode, nil
 }
 
-func SearchAndInsert(ctx context.Context, code, phone, fingerPrintData string, userid int64, cl *client.Dgraph) error {
+func SearchAndInsertReferral(ctx context.Context, code, phone, fingerPrintData string, userid int64, cl *client.Dgraph) error {
 
 	q := `
 	{
@@ -159,7 +159,7 @@ func SearchAndInsert(ctx context.Context, code, phone, fingerPrintData string, u
 	return err
 }
 
-func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]UserDGraph, error) {
+func GetExistingReferral(ctx context.Context, code string, cl *client.Dgraph) (referralUid string, fraudUsers []UserDGraph, err error) {
 	q := fmt.Sprintf(`{
 		referral(func: eq(ref_code, %q)) {
 			uid
@@ -179,7 +179,7 @@ func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]UserDGr
 
 	if err != nil {
 		log.Println(fmt.Sprintf("Couldn't fetch referral(%s) from DGraph with error:%v", code, err))
-		return nil, err
+		return "", nil, err
 	}
 
 	var decodeObj struct {
@@ -189,24 +189,28 @@ func GetExisting(ctx context.Context, code string, cl *client.Dgraph) ([]UserDGr
 	err = json.Unmarshal(resp.Json, &decodeObj)
 	if err != nil {
 		log.Println("Unmarshal error:", err)
-		return nil, err
+		return "", nil, err
 	}
 
 	if len(decodeObj.Referrals) == 0 {
-		return []UserDGraph{}, nil
+		return "", []UserDGraph{}, nil
 	}
 
 	if len(decodeObj.Referrals[0].AppliedByDevice) == 0 {
-		return []UserDGraph{}, nil
+		return decodeObj.Referrals[0].UID, []UserDGraph{}, nil
 	}
 
-	var userDgraphModels []UserDGraph
+	//var userDgraphModels []UserDGraph
 
 	for _, d := range decodeObj.Referrals[0].AppliedByDevice {
-		userDgraphModels = append(userDgraphModels, d.Users...)
+		fraudUsers = append(fraudUsers, d.Users...)
 	}
 
-	return userDgraphModels, nil
+	return decodeObj.Referrals[0].UID, fraudUsers, nil
+}
+
+func InsertAppliedReferral() {
+
 }
 
 //
