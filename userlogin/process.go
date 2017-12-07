@@ -78,12 +78,6 @@ func GetBytes(key interface{}) ([]byte, error) {
 
 func LoadUserLoginData(ctx context.Context, request []byte) {
 	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadUserLoginData:")
-	/*db, err := sql.Open("postgres", connUser)
-
-	if err != nil {
-		log.Fatal("Couldn't connect to postgres:", err)
-	}
-	defer db.Close()*/
 
 	uid, err := jsonparser.GetString(request, "NewImage", "uid", "S")
 	if err != nil {
@@ -119,8 +113,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 			log.Println("Postgres error for uid:", uids, err)
 			return
 		}
-		go writetoDgraph(ctx, c, uids, udata, shaHash, nos)
-		//writetoDgraph(uids, userdata{}, shaHash, nos)
+		go writetoDgraphTogether(ctx, c, uids, udata, shaHash, nos)
 	}
 }
 
@@ -244,6 +237,142 @@ func getPhoneNos(js []byte) ([]string, error) {
 
 	log.Println("Going to push phone:", oldPhoneNos, newPhoneNos)
 	return newPhoneNos, nil
+}
+
+func writetoDgraphTogether(ctx context.Context, ct *client.Dgraph, userid string, usr userdata, finger []string, phones []string) {
+	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadUserLoginData-writetoDgraph:")
+
+	q := fmt.Sprintf(`
+							{
+								user(func: eq(user_id, %q)) {
+									uid
+								}
+							`, userid)
+
+	if len(phones) != 0 {
+		phonesCSV := utils.StringListToCSVString(phones)
+		q += fmt.Sprintf(`	phone(func:eq(phone_number,[%s])){
+											uid
+									}
+									`, phonesCSV)
+
+	}
+
+	if len(finger) != 0 {
+		fingerprintCSV := utils.StringListToCSVString(finger)
+		q += fmt.Sprintf(`	fingerprint(func:eq(fingerprint_data,[%s])){
+										uid
+									}
+									`, fingerprintCSV)
+	}
+	q += fmt.Sprintf(`}`)
+
+	log.Println("SearchQ:", q)
+	r, err := searchDGraph(ctx, ct, q)
+	if err != nil {
+		log.Println("ErrorDgraphSearch:", q, err)
+		return
+	}
+
+	m := segregateDGraphData(r, finger, phones, userid)
+
+	err = upsertUsersLoginData(ctx, ct, usr, userid, finger, phones, m)
+
+	if err != nil {
+		log.Println("Couldn't write to dgraph :(")
+	}
+}
+
+func segregateDGraphData(r Result, finger, phones []string, userid string) map[string]string {
+	m := make(map[string]string)
+
+	for _, p := range phones {
+		m[p] = ""
+	}
+	for _, f := range finger {
+		m[f] = ""
+	}
+
+	m[userid] = ""
+	if len(r.User) != 0 {
+		m[userid] = r.User[0].UID
+	}
+
+	for _, p := range r.PhoneNumber {
+		m[p.Phone] = p.UID
+	}
+
+	for _, f := range r.Fingerprint {
+		m[f.Fingerprint_Data] = f.UID
+	}
+
+	return m
+}
+
+func upsertUsersLoginData(ctx context.Context, cl *client.Dgraph, usr userdata, userid string, finger, phones []string, uidMap map[string]string) error {
+	q := ``
+
+	var u string
+
+	if uidMap[userid] == "" {
+		//Create user
+		u = "_:u"
+		q += fmt.Sprintf(`	%v <user_id> %q .
+									%v <name> "USER" .
+								`, u, userid, u)
+	} else {
+		//just set the userUid
+		u = "<" + uidMap[userid] + ">"
+	}
+
+	//Add userdata edges idempotent action
+	q += fmt.Sprintf(`	%v <user_name> %q .
+								%v <user_email_id> %q .
+							`, u, getValidValues(usr.user_name), u, getValidValues(usr.user_email_id))
+	//iterate through fingerprintdata and add those to the query
+	fcount := 0
+	for _, f := range finger {
+		var fuid string
+		if uidMap[f] == "" {
+			fuid = fmt.Sprintf("_:f_%d", fcount)
+			fcount++
+			q += fmt.Sprintf(`	%v <fingerprint_data> %q .
+										%v <name> "FINGERPRINT" .
+										`, fuid, f, fuid)
+		} else {
+			fuid = "<" + uidMap[f] + ">"
+		}
+
+		q += fmt.Sprintf(`	%v <DeviceFingerPrint> %v .
+								`, u, fuid)
+
+	}
+	//iterate through phones and add those to the query if already not exist
+	pcount := 0
+	for _, p := range phones {
+		var phuid string
+		if uidMap[p] == "" {
+			phuid = fmt.Sprintf("_:p_%d", pcount)
+			pcount++
+			q += fmt.Sprintf(`	%v <phone_number> %q .
+										%v <name> "PHONE" .
+									`, phuid, p, phuid)
+		} else {
+			phuid = "<" + uidMap[p] + ">"
+		}
+
+		q += fmt.Sprintf(` 		%v <PulsaPhoneNumber> %v .
+						`, u, phuid)
+	}
+
+	log.Println("QPush:", q)
+	err := dgraph.RetryMutate(ctx, cl, q, dgraph.DGraphMutationRetryCount)
+	if err != nil {
+		log.Println("ErrorDgraphPush:", q, err)
+	} else {
+		log.Println("Successfully pushed to dgraph.")
+	}
+	return err
 }
 
 func writetoDgraph(ctx context.Context, ct *client.Dgraph, userid string, usr userdata, finger []string, phones []string) {

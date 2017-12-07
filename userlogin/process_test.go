@@ -1,6 +1,10 @@
 package userlogin
 
-import "testing"
+import (
+	"fmt"
+	"github.com/tokopedia/user-dgraph/riderorder"
+	"testing"
+)
 
 var sampleRequest = []byte(`
 {
@@ -191,6 +195,15 @@ var sampleRequest = []byte(`
     "StreamViewType": "NEW_AND_OLD_IMAGES"
 }
 	`)
-func TestLoadUserLoginData(t *testing.T) {
-	LoadUserLoginData(sampleRequest)
+
+func TestSeg(t *testing.T) {
+	r := Result{
+		User:        []riderorder.User{riderorder.User{UID: "useruid", UserId: "userid"}},
+		Fingerprint: []Fingerprint{Fingerprint{UID: "f1uid", Fingerprint_Data: "f1"}},
+		PhoneNumber: []riderorder.PhoneNumber{riderorder.PhoneNumber{UID: "p1uid", Phone: "p1"}},
+	}
+	ph := []string{"p1", "p2"}
+	fi := []string{"f1", "f2"}
+	m := segregateDGraphData(r, fi, ph, "userid")
+	fmt.Println(m)
 }
