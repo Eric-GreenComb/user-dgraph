@@ -242,7 +242,7 @@ func getPhoneNos(js []byte) ([]string, error) {
 		return make([]string, 0), nil
 	}
 
-	log.Println("Goint to push phone:", oldPhoneNos, newPhoneNos)
+	log.Println("Going to push phone:", oldPhoneNos, newPhoneNos)
 	return newPhoneNos, nil
 }
 
