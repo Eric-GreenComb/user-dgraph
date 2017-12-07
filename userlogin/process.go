@@ -182,7 +182,7 @@ func getFingerprintHash(js []byte, uids string) []string {
 	if allEqual {
 		return make([]string, 0)
 	}
-
+	log.Println("Going to push fingerprint:", oldShaHash, newShaHash)
 	return newShaHash
 }
 
@@ -242,6 +242,7 @@ func getPhoneNos(js []byte) ([]string, error) {
 		return make([]string, 0), nil
 	}
 
+	log.Println("Goint to push phone:", oldPhoneNos, newPhoneNos)
 	return newPhoneNos, nil
 }
 
