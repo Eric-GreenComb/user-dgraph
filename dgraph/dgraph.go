@@ -7,6 +7,7 @@ import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/dgraph-io/dgraph/y"
+	"github.com/tokopedia/user-dgraph/utils"
 	"google.golang.org/grpc"
 	"log"
 	"time"
@@ -50,6 +51,7 @@ func GetClient() *client.Dgraph {
 }
 
 func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter int) error {
+	defer utils.PrintTimeElapsed(time.Now(), "Time elapsed for RetryMutate:")
 	totalCount := counter
 	for counter > 0 {
 		err := doMutate(ctx, cl, query)
@@ -71,6 +73,7 @@ func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter i
 }
 
 func doMutate(ctx context.Context, cl *client.Dgraph, query string) error {
+	defer utils.PrintTimeElapsed(time.Now(), "Time elapsed doMutate:")
 	txn := cl.NewTxn()
 	defer txn.Discard(ctx)
 
