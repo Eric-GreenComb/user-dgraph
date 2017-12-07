@@ -37,10 +37,14 @@ func main() {
 
 	router.POST("/dgraph/push/rider-order", func(ginContext *gin.Context) {
 		var obj riderorder.DynamoStreamRecord
-		ginContext.BindJSON(&obj)
-		ctx := context.Background()
-		riderorder.LoadRideData(ctx, &obj)
-		ginContext.JSON(200, `{'result':'ok'}`)
+		err := ginContext.BindJSON(&obj)
+		if err != nil {
+			ginContext.JSON(http.StatusBadRequest, `{'result':'invalid_req'}`)
+		} else {
+			ctx := context.Background()
+			riderorder.LoadRideData(ctx, &obj)
+			ginContext.JSON(200, `{'result':'ok'}`)
+		}
 
 	})
 	router.POST("/dgraph/push/user-login", func(ginContext *gin.Context) {

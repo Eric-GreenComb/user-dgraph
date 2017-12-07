@@ -188,11 +188,12 @@ func LoadRideData(ctx context.Context, record *DynamoStreamRecord) {
 	if o.Status.Value != "completed" && c.Status.Value == "completed" {
 		log.Println("Got completed ride:", c)
 		cl := dgraph.GetClient()
-		writeToDgraph(ctx, cl, c)
+		go writeToDgraph(ctx, cl, c)
 	}
 }
 
 func writeToDgraph(ctx context.Context, ct *client.Dgraph, d Data) {
+	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadRideData-writeToDgraph:")
 	txn := ct.NewTxn()
 	defer txn.Discard(ctx)
 	q := getQuery(d)

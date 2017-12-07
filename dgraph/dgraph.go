@@ -15,8 +15,8 @@ import (
 var dgraphhost = "10.255.151.17:7080" //<- DCI//"10.0.11.162:7080" //<-Aws //"localhost:9080"
 const (
 	QueryThreshold           = 10000
-	DGraphMutationRetryCount = 20
-	SleepTimeMSBeforeRetry   = 100
+	DGraphMutationRetryCount = 10
+	SleepTimeMSBeforeRetry   = 10
 )
 
 var c *client.Dgraph

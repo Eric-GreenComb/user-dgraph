@@ -119,7 +119,7 @@ func LoadUserLoginData(ctx context.Context, request []byte) {
 			log.Println("Postgres error for uid:", uids, err)
 			return
 		}
-		writetoDgraph(ctx, c, uids, udata, shaHash, nos)
+		go writetoDgraph(ctx, c, uids, udata, shaHash, nos)
 		//writetoDgraph(uids, userdata{}, shaHash, nos)
 	}
 }
@@ -246,6 +246,7 @@ func getPhoneNos(js []byte) ([]string, error) {
 }
 
 func writetoDgraph(ctx context.Context, ct *client.Dgraph, userid string, usr userdata, finger []string, phones []string) {
+	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadUserLoginData-writetoDgraph:")
 
 	q1 := `
 	{
