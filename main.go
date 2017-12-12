@@ -14,6 +14,8 @@ import (
 	"io/ioutil"
 
 	"context"
+	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos/api"
 	"github.com/tokopedia/user-dgraph/utils"
 	"time"
 )
@@ -156,18 +158,11 @@ func TestingLoad(outerloop, parallelexecs int) {
 		c := make(chan bool, parallelexecs)
 		for j := 0; j < parallelexecs; j++ {
 			go func(i, j int) {
-				log.Println("Done from:", i, j)
-				t := time.Now()
-				q := fmt.Sprintf(`
-						_:luke <name> "Luke Skywalker_%v" .
-						_:sw1 <name> "Star Wars: Episode IV - A New Hope_%v" .
-						_:sw1 <starring> _:luke .
-					`, t, t)
-
-				err := dgraph.RetryMutate(ctx, cl, q, 1)
+				err := tryUpsert(ctx, i, j, cl)
 				if err != nil {
 					log.Fatal(err)
 				}
+				log.Println("Done from:", i, j)
 				c <- true
 			}(i, j)
 		}
@@ -178,4 +173,41 @@ func TestingLoad(outerloop, parallelexecs int) {
 		time.Sleep(10 * time.Millisecond)
 		log.Println("All done")
 	}
+}
+
+func tryUpsert(ctx context.Context, i, j int, cl *client.Dgraph) error {
+	t := time.Now()
+	defer utils.PrintTimeElapsed(t, "Elapsed time in tryUpsert:")
+	txn := cl.NewTxn()
+	defer txn.Discard(ctx)
+
+	searchQ := fmt.Sprintf(`
+					{
+						find(func:eq(name, "Luke Skywalker_%v")){
+							uid
+						}
+					}
+				`, t)
+
+	log.Println("Trying Search")
+	_, err := txn.Query(ctx, searchQ)
+	if err != nil {
+		return err
+	}
+
+	q := fmt.Sprintf(`
+						_:luke <name> "Luke Skywalker_%v" .
+						_:sw1 <name> "Star Wars: Episode IV - A New Hope_%v" .
+						_:sw1 <starring> _:luke .
+					`, t, t)
+
+	mu := &api.Mutation{SetNquads: []byte(q), IgnoreIndexConflict: true}
+	_, err = txn.Mutate(ctx, mu)
+	if err != nil {
+		return err
+	}
+	log.Println("Trying commit")
+	err = txn.Commit(ctx)
+
+	return err
 }
