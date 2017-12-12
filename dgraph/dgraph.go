@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var dgraphhost = "10.255.151.17:7080" //<- DCI//"10.0.11.162:7080" //<-Aws //"localhost:9080"
+var dgraphhost = "10.0.11.162:7080" //"10.255.151.17:7080" //<- DCI//"10.0.11.162:7080" //<-Aws //"localhost:9080"
 const (
 	QueryThreshold           = 10000
 	DGraphMutationRetryCount = 10
@@ -30,15 +30,6 @@ func newClient() *client.Dgraph {
 		log.Fatal(err)
 	}
 	return client.NewDgraphClient(
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
-		api.NewDgraphClient(d),
 		api.NewDgraphClient(d),
 	)
 }
@@ -74,14 +65,17 @@ func RetryMutate(ctx context.Context, cl *client.Dgraph, query string, counter i
 
 func doMutate(ctx context.Context, cl *client.Dgraph, query string) error {
 	defer utils.PrintTimeElapsed(time.Now(), "Time elapsed doMutate:")
+	log.Println("Trying mutation")
 	txn := cl.NewTxn()
 	defer txn.Discard(ctx)
 
 	mu := &api.Mutation{SetNquads: []byte(query), IgnoreIndexConflict: true}
 	_, err := txn.Mutate(ctx, mu)
 	if err != nil {
+		log.Println("Got error in mutation", err)
 		return err
 	}
+	log.Println("Trying commit")
 	err = txn.Commit(ctx)
 	return err
 }

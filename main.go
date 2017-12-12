@@ -14,6 +14,8 @@ import (
 	"io/ioutil"
 
 	"context"
+	"github.com/tokopedia/user-dgraph/utils"
+	"time"
 )
 
 func main() {
@@ -117,11 +119,26 @@ func main() {
 		}
 	})
 
-	router.Run(":" + port)
-}
+	router.POST("/restricted/loadtest", func(context *gin.Context) {
+		type req struct {
+			OuterLoop    int `json:"outer_loop"`
+			ParallelExec int `json:"parallel_exec"`
+		}
 
-type UserLoginDynamoStreamRecord struct {
-	Keys map[string]map[string]string `json:"Keys"`
+		var requestObj req
+		context.BindJSON(&requestObj)
+
+		log.Println("Load loadtest Req:", requestObj)
+
+		if requestObj.OuterLoop == 0 || requestObj.ParallelExec == 0 {
+			context.JSON(http.StatusBadRequest, "{'result':'invalid_req'}")
+		} else {
+			go TestingLoad(requestObj.OuterLoop, requestObj.ParallelExec)
+			context.JSON(200, "{'result':'ok'}")
+		}
+	})
+
+	router.Run(":" + port)
 }
 
 const (
@@ -130,11 +147,35 @@ const (
 	NEW_IMAGE = "NewImage"
 )
 
-/*func TestUserLogin() {
-	filepath := "/Users/ajayk/Downloads/sample_user_login.json"
-	data, err := ioutil.ReadFile(filepath)
-	if err != nil {
-		log.Println("Couldn't read file", err)
+func TestingLoad(outerloop, parallelexecs int) {
+	defer utils.PrintTimeElapsed(time.Now(), "Total time spent:")
+	ctx := context.Background()
+	cl := dgraph.GetClient()
+
+	for i := 0; i < outerloop; i++ {
+		c := make(chan bool, parallelexecs)
+		for j := 0; j < parallelexecs; j++ {
+			go func(i, j int) {
+				log.Println("Done from:", i, j)
+				t := time.Now()
+				q := fmt.Sprintf(`
+						_:luke <name> "Luke Skywalker_%v" .
+						_:sw1 <name> "Star Wars: Episode IV - A New Hope_%v" .
+						_:sw1 <starring> _:luke .
+					`, t, t)
+
+				err := dgraph.RetryMutate(ctx, cl, q, 1)
+				if err != nil {
+					log.Fatal(err)
+				}
+				c <- true
+			}(i, j)
+		}
+
+		for j := 0; j < parallelexecs; j++ {
+			<-c
+		}
+		time.Sleep(10 * time.Millisecond)
+		log.Println("All done")
 	}
-	userlogin.LoadUserLoginData(data)
-}*/
+}

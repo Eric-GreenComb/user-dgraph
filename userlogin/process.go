@@ -240,6 +240,7 @@ func getPhoneNos(js []byte) ([]string, error) {
 }
 
 func writetoDgraphTogether(ctx context.Context, ct *client.Dgraph, userid string, usr userdata, finger []string, phones []string) {
+	log.Println("Got request to write UserloginDGraph at:", time.Now())
 	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadUserLoginData-writetoDgraph:")
 
 	q := fmt.Sprintf(`

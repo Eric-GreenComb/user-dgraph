@@ -193,6 +193,7 @@ func LoadRideData(ctx context.Context, record *DynamoStreamRecord) {
 }
 
 func writeToDgraph(ctx context.Context, ct *client.Dgraph, d Data) {
+	log.Println("Got request to write RideOrderDGraph at:", time.Now())
 	defer utils.PrintTimeElapsed(time.Now(), "Elapsed time for LoadRideData-writeToDgraph:")
 	txn := ct.NewTxn()
 	defer txn.Discard(ctx)
