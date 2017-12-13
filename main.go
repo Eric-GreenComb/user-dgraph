@@ -130,7 +130,7 @@ func main() {
 		var requestObj req
 		context.BindJSON(&requestObj)
 
-		log.Println("Load loadtest Req:", requestObj)
+		log.Println("Load loadtest Req:", requestObj, " at:", time.Now())
 
 		if requestObj.OuterLoop == 0 || requestObj.ParallelExec == 0 {
 			context.JSON(http.StatusBadRequest, "{'result':'invalid_req'}")
